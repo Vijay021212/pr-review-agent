@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pr-review-agent"
+dynamic = ["version"]
+description = "An AI agent that reviews GitHub pull requests. Runs on a free local model by default; paid models optional."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Vijay Bolle", email = "mail4vijaybolle@gmail.com" }]
+keywords = ["code-review", "pull-request", "github", "llm", "ollama", "agent"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
+# Only packages our own code imports directly; uv.lock pins everything else.
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/Vijay021212/pr-review-agent"
+Issues = "https://github.com/Vijay021212/pr-review-agent/issues"
+Changelog = "https://github.com/Vijay021212/pr-review-agent/blob/main/CHANGELOG.md"
+
+# Development-only tools: `uv sync` installs them, users of the package don't get them.
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",        # type checker, strict mode
+    "pytest>=9.2.0",      # test runner
+    "pytest-cov>=7.1.0",  # coverage measurement and the 90% gate
+    "ruff>=0.17.4",       # linter and formatter
+]
+
+# The version lives in one place: __version__ in the package.
+[tool.hatch.version]
+path = "src/pr_review_agent/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pr_review_agent"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Finished experiments are kept as a record of past decisions, not maintained as product code.
+extend-exclude = ["experiments"]
+
+[tool.ruff.lint]
+# E/W/F: errors and bugs, I: import order, UP: modern syntax, B: likely bugs,
+# SIM: simplifications, S: security (bandit rules), PT: pytest style, RUF: ruff's own checks
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "S", "PT", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests are allowed plain `assert`.
+"tests/**" = ["S101"]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# -ra lists every test that didn't pass; the coverage gate fails the run below 90%.
+addopts = "-ra --strict-markers --cov=pr_review_agent --cov-report=term-missing --cov-fail-under=90"
+
+[tool.coverage.run]
+# Branch coverage: every `if` must be tested both ways, not just every line run.
+branch = true

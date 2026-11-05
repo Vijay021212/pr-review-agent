@@ -1,0 +1,3 @@
+# Store and check out text files with LF line endings on every platform, so Windows and
+# Linux see identical files and formatting checks give the same result on both.
+* text=auto eol=lf

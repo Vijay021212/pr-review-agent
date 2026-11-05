@@ -1,6 +1,6 @@
 # Plan
 
-> **Status:** **v1.1.** v1.0 approved 2026-11-05 by Vijay Bolle. Changes go through a pull request that updates this document.
+> **Status:** **v1.2.** v1.0 approved 2026-11-05 by Vijay Bolle. Changes go through a pull request that updates this document.
 > **Builds on:** [requirements](requirements.md), [design](design.md), [ADR-001](adr/001-model-choice.md), [ADR-002](adr/002-single-agent-with-stages.md), [ADR-003](adr/003-own-model-wrappers.md).
 
 The design says **how** the agent is built. This plan says **in what order**: the work is cut into issues, grouped into milestones (one per release), and tracked on the project board. Every issue names the requirements it delivers, so nothing in the requirements is forgotten and nothing is built that isn't asked for.
@@ -28,7 +28,7 @@ Each release **works end to end**. Version numbers follow [Semantic Versioning](
 
 | # | Issue | Requirements | Done when | Needs | Size |
 |---|---|---|---|---|---|
-| 1 | **Project setup:** uv package, ruff, pytest with the 90% coverage gate, CI on Linux with pinned actions, pull request template with the self-review (3.2), `py.typed` marker, `.gitignore`, licence, README outline | NFR-2, NFR-6, NFR-8, FR-24 | `uv run pytest` and `uv run ruff check` pass locally and in CI; a new pull request shows the template | — | S |
+| 1 | **Project setup:** uv package, ruff, mypy (strict), pytest with the 90% coverage gate, CI on Windows and Linux with pinned actions, pull request template with the self-review (3.2), `py.typed` marker, `.gitignore`, licence, README outline | NFR-2, NFR-6, NFR-8, FR-24 | `uv run pytest` and `uv run ruff check` pass locally and in CI; a new pull request shows the template | — | S |
 | 2 | **Data types and interfaces** (`domain.py`): the types in design 2.1, the `GitHub` and `ChatModel` interfaces, `Deadline` | FR-9, NFR-8 | Every type exists with tests for its validation rules | 1 | S |
 | 3 | **Settings** (`config.py`): `PRRA_` variables and `.env`, `GITHUB_TOKEN` fallback | NFR-7 | Defaults, overrides and the fallback are tested | 1 | S |
 | 4 | **Secret masking** (`secrets.py`): known secret patterns, masked as `sk-...a1b2` | FR-21 | Every pattern in design section 8 is masked in tests; normal code is left alone | 1 | S |
@@ -95,7 +95,7 @@ Written in the pull request description (the template asks for it):
 
 1. **Gaps:** compare the work with the issue's "Done when", its requirements and the design. Anything missing or different is fixed now or recorded as a new issue, never silently dropped.
 2. **Integration:** is the new part wired in (`factory.py`, `pipeline.py`, settings, command line)? Do the integration tests still pass? Does everything that uses the changed code still work?
-3. **Code quality:** `ruff` clean, no repeated code, small functions, clear names, comments that explain why, helpful error messages, no leftover debug code.
+3. **Code quality:** `ruff` and `mypy` clean, no repeated code, small functions, clear names, comments that explain why, helpful error messages, no leftover debug code.
 
 ### 3.3 Definition of done
 
@@ -103,7 +103,7 @@ Written in the pull request description (the template asks for it):
 - [ ] Unit tests cover the new behaviour, including edge cases and failures.
 - [ ] Integration tests updated if a stage or its wiring changed.
 - [ ] Real run done and pasted, if the user-visible behaviour changed.
-- [ ] `ruff`, `pytest` and the coverage gate pass, locally and in CI.
+- [ ] `ruff`, `mypy`, `pytest` and the coverage gate pass, locally and in CI.
 - [ ] Self-review (3.2) written in the pull request.
 - [ ] Docs updated if behaviour changed.
 - [ ] Merged through a pull request that says `Closes #N`.
@@ -148,3 +148,4 @@ flowchart LR
 | v0.1 | 2026-11-05 | First draft |
 | v1.0 | 2026-11-05 | Quality rule added (section 3: three test levels, self-review, coverage gate, milestone review); approved by Vijay Bolle |
 | v1.1 | 2026-11-05 | FR-24 (Python library): `py.typed` in #1, public function in #12, new issue #30 (#29 is the change-request pull request: issues and pull requests share one number sequence) |
+| v1.2 | 2026-11-05 | #1: mypy in strict mode added to the checks; CI runs on Windows and Linux |

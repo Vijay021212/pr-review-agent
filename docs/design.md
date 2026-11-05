@@ -115,7 +115,9 @@ A small `ChatModel` interface with one job: **send instructions and a message, g
 
 ```python
 class ChatModel(Protocol):
-    def complete_json(self, system: str, user: str, schema: dict, deadline: Deadline) -> ModelReply: ...
+    def complete_json(
+        self, system: str, user: str, schema: dict, deadline: Deadline
+    ) -> ModelReply: ...
 ```
 
 | Wrapper | Talks to | How it gets JSON |
