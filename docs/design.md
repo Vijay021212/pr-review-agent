@@ -1,6 +1,6 @@
 # Design
 
-> **Status:** **v1.0, approved 2026-11-05** by Vijay Bolle. Changes now go through change control (section 17).
+> **Status:** **v1.2.** v1.0 approved 2026-11-05 by Vijay Bolle; later changes go through change control (section 17).
 > **Builds on:** [requirements v1.0](requirements.md), [ADR-001](adr/001-model-choice.md) (default model `qwen2.5-coder:7b`), [ADR-002](adr/002-single-agent-with-stages.md) (one agent working in stages), [ADR-003](adr/003-own-model-wrappers.md) (own model wrappers instead of LiteLLM).
 
 The requirements say **what** the agent does. This document says **how** it's built: the parts of the program, what each part is responsible for, the data passed between them, and the important technical choices. Requirement IDs (FR-, NFR-) link each part back to why it exists.
@@ -11,7 +11,9 @@ The requirements say **what** the agent does. This document says **how** it's bu
 
 ```mermaid
 flowchart TB
-    cli["cli.py<br/>pr-review-agent review PR-link"] --> factory["factory.py<br/>builds and connects every part"]
+    cli["cli.py<br/>pr-review-agent review PR-link"] --> api["api.py<br/>review_pull_request()<br/>the public API"]
+    developer["Other developers' code"] --> api
+    api --> factory["factory.py<br/>builds and connects every part"]
     factory --> pipeline["pipeline.py<br/>runs the stages in order"]
 
     subgraph stages ["Stages (ADR-002)"]
@@ -225,6 +227,29 @@ pr-review-agent eval eval/cases                                       # run the 
 
 Exit codes: `0` review complete; `1` review incomplete or failed; `2` bad input or setup problem (FR-16).
 
+### 12.1 Python API (FR-24)
+
+The command line is a thin layer over one public function, so the command line and other developers' code always behave the same:
+
+```python
+from pr_review_agent import Settings, review_pull_request
+
+result = review_pull_request("https://github.com/owner/repo/pull/7", dry_run=True)
+print(result.recommendation.value, len(result.findings.kept))
+
+result = review_pull_request(link, settings=Settings(provider="anthropic", model="..."))
+```
+
+| Public name | What it is |
+|---|---|
+| `review_pull_request(link, *, settings=None, dry_run=False) -> ReviewResult` | Runs a whole review. With no `settings`, they're read from the environment as for the command line |
+| `Settings` | The settings in section 10, as a typed object |
+| `ReviewResult`, `Understanding`, `Finding`, `CheckedFindings`, `Recommendation`, `ReviewScope` | The result types in section 2.1 |
+| `SetupError` | Bad input or a setup problem; the command line turns it into exit code `2` |
+| `ReviewIncomplete` | The review couldn't be completed (NFR-4); the command line turns it into exit code `1` |
+
+**The public API is exactly what `pr_review_agent/__init__.py` exports.** Everything else is internal and can change in any release. The package ships a `py.typed` marker, so type checkers in other projects see our types. The PyPI package name is decided before the first PyPI release, because `pr-review-agent` is already taken there; the import name stays `pr_review_agent`.
+
 ## 13. Evaluation (FR-18)
 
 The evaluation reuses the **real pipeline** with two parts swapped: a `FixtureGitHub` that reads test pull requests from folders instead of GitHub, and a recording publisher that captures the review instead of posting it.
@@ -245,6 +270,8 @@ The diff is computed from `base/` and `head/`, as in the ADR-001 test, so writin
 
 ```
 src/pr_review_agent/
+  __init__.py        the public API (section 12.1); py.typed marks the package as typed
+  api.py             review_pull_request(), used by the command line and by other developers
   domain.py          data types (section 2.1) and interfaces; depends on nothing else
   config.py          settings
   factory.py         builds and connects every part
@@ -282,6 +309,7 @@ eval/cases/          the test pull requests
 | FR-16 | stages/preflight, cli.py exit codes |
 | FR-18 | evaluation/, eval/cases |
 | FR-23 | runlog.py |
+| FR-24 | api.py, `__init__.py`, py.typed |
 | NFR-1, NFR-7 | models/, config.py |
 | NFR-3, NFR-4 | pipeline.py (deadline, failure rule) |
 | NFR-5 | tools.py, github/ (safe snapshot), secrets.py |
@@ -304,5 +332,6 @@ eval/cases/          the test pull requests
 | v0.1 | 2026-11-05 | First draft |
 | v1.0 | 2026-11-05 | Approved by Vijay Bolle; ADR-003 accepted |
 | v1.1 | 2026-11-05 | Editorial only: references to other projects removed |
+| v1.2 | 2026-11-05 | Python API (section 12.1) for requirement FR-24 |
 
 After v1.0, a design change is made through a pull request that updates this document, adds a row here and, for a significant choice, adds an ADR.

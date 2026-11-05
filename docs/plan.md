@@ -1,6 +1,6 @@
 # Plan
 
-> **Status:** **v1.0, approved 2026-11-05** by Vijay Bolle. Changes go through a pull request that updates this document.
+> **Status:** **v1.1.** v1.0 approved 2026-11-05 by Vijay Bolle. Changes go through a pull request that updates this document.
 > **Builds on:** [requirements](requirements.md), [design](design.md), [ADR-001](adr/001-model-choice.md), [ADR-002](adr/002-single-agent-with-stages.md), [ADR-003](adr/003-own-model-wrappers.md).
 
 The design says **how** the agent is built. This plan says **in what order**: the work is cut into issues, grouped into milestones (one per release), and tracked on the project board. Every issue names the requirements it delivers, so nothing in the requirements is forgotten and nothing is built that isn't asked for.
@@ -16,7 +16,7 @@ Each release **works end to end**. Version numbers follow [Semantic Versioning](
 | **v0.1.0 First review in the terminal** | Give it a pull request link with `--dry-run` and it prints a review: understanding, findings for levels 1–3, and a recommendation. Nothing is posted | #1–#13 |
 | **v0.2.0 Explores, double-checks and posts** | It explores related code on its own, double-checks findings, covers security and performance, and posts the review on GitHub | #14–#20 |
 | **v0.3.0 Measured** | An offline evaluation set gives scores per review level, published in the README | #21–#23 |
-| **v1.0.0 Complete** | Design-fit and quality checks, clean re-runs, the rules file, paid providers, and setup in five commands | #24–#28 |
+| **v1.0.0 Complete** | Design-fit and quality checks, clean re-runs, the rules file, paid providers, the Python library on PyPI, and setup in five commands | #24–#29 |
 
 **Why this order:** the first release goes through every stage in the simplest way, so the whole path works early and problems show up early. Later releases make each stage smarter. Measuring (v0.3) comes before the last features, so each one can be shown to help.
 
@@ -28,7 +28,7 @@ Each release **works end to end**. Version numbers follow [Semantic Versioning](
 
 | # | Issue | Requirements | Done when | Needs | Size |
 |---|---|---|---|---|---|
-| 1 | **Project setup:** uv package, ruff, pytest with the 90% coverage gate, CI on Linux with pinned actions, pull request template with the self-review (3.2), `.gitignore`, licence, README outline | NFR-2, NFR-6, NFR-8 | `uv run pytest` and `uv run ruff check` pass locally and in CI; a new pull request shows the template | — | S |
+| 1 | **Project setup:** uv package, ruff, pytest with the 90% coverage gate, CI on Linux with pinned actions, pull request template with the self-review (3.2), `py.typed` marker, `.gitignore`, licence, README outline | NFR-2, NFR-6, NFR-8, FR-24 | `uv run pytest` and `uv run ruff check` pass locally and in CI; a new pull request shows the template | — | S |
 | 2 | **Data types and interfaces** (`domain.py`): the types in design 2.1, the `GitHub` and `ChatModel` interfaces, `Deadline` | FR-9, NFR-8 | Every type exists with tests for its validation rules | 1 | S |
 | 3 | **Settings** (`config.py`): `PRRA_` variables and `.env`, `GITHUB_TOKEN` fallback | NFR-7 | Defaults, overrides and the fallback are tested | 1 | S |
 | 4 | **Secret masking** (`secrets.py`): known secret patterns, masked as `sk-...a1b2` | FR-21 | Every pattern in design section 8 is masked in tests; normal code is left alone | 1 | S |
@@ -39,7 +39,7 @@ Each release **works end to end**. Version numbers follow [Semantic Versioning](
 | 9 | **Find pass A** (correctness and regressions, levels 1–3) and its prompt | FR-6, FR-9 | Findings have every field in design 2.1; batches are reviewed one by one; tested with a fake model | 2, 5, 7 | M |
 | 10 | **Recommendation rules and sensitive areas** (`recommendation.py`, `sensitive.py`) | FR-12, requirements 5.3 | Every rule and every sensitive word has a test, including whole-word matching (`author.py` is not `auth`) | 2 | S |
 | 11 | **Summary and comment text** (`summary.py`) | FR-14 | The Markdown matches the summary in the requirements, including skipped files and the reviewed commit; all text goes through masking | 2, 4 | S |
-| 12 | **Pipeline and command line:** stages in order, hard limit, failure rule, `review <link> --dry-run`, exit codes | FR-15, FR-16, NFR-3, NFR-4 | A dry run on a real public pull request prints a complete review; a failing stage gives "incomplete" and exit code 1 | 5–11 | M |
+| 12 | **Pipeline, public function and command line:** stages in order, hard limit, failure rule, `review_pull_request()` (design 12.1), and `review <link> --dry-run` built on it, with exit codes | FR-15, FR-16, FR-24, NFR-3, NFR-4 | A dry run on a real public pull request prints a complete review; a failing stage gives "incomplete" and exit code 1; the command line only calls `review_pull_request()` | 5–11 | M |
 | 13 | **Run log** (`runlog.py`) | FR-23 | Each run writes a JSON-lines file with every stage, model call and timing, masked | 4, 12 | S |
 
 ### v0.2.0 Explores, double-checks and posts
@@ -70,7 +70,8 @@ Each release **works end to end**. Version numbers follow [Semantic Versioning](
 | 25 | **Clean re-runs:** fingerprints, skip resolved threads, update the one summary | FR-11, FR-22 | A second run on an unchanged pull request posts no duplicates and edits its summary | 19 | M |
 | 26 | **Project rules file,** read from the base branch | FR-17 | Ignore patterns, extra sensitive areas and instructions work; a change to the rules file in the pull request is ignored and mentioned | 7, 10 | S |
 | 27 | **Paid providers:** OpenAI-compatible and Anthropic wrappers | NFR-1, NFR-7, ADR-003 | Switching provider is a settings change only; tested with recorded replies; one real call checked by hand | 5 | M |
-| 28 | **Release v1.0.0:** setup in five commands, README with diagrams and scores, final evaluation, changelog | NFR-9, FR-18 | A fresh clone reaches its first review in five commands or fewer, following only the README | 23–27 | M |
+| 29 | **Python library:** public API reference and examples, the PyPI package name, publishing to PyPI from CI | FR-24 | Every public name is documented with an example; a test fails if the public API changes without a version bump; `pip install` from PyPI works on Windows and Linux | 12 | M |
+| 28 | **Release v1.0.0:** setup in five commands, README with diagrams and scores, final evaluation, changelog | NFR-9, FR-18 | A fresh clone reaches its first review in five commands or fewer, following only the README | 23–27, 29 | M |
 
 Every FR and NFR appears in at least one row above. NFR-5 (safe tools and network) is spread across #6, #14, #15 and #18.
 
@@ -146,3 +147,4 @@ flowchart LR
 |---|---|---|
 | v0.1 | 2026-11-05 | First draft |
 | v1.0 | 2026-11-05 | Quality rule added (section 3: three test levels, self-review, coverage gate, milestone review); approved by Vijay Bolle |
+| v1.1 | 2026-11-05 | FR-24 (Python library): `py.typed` in #1, public function in #12, new issue #29 |

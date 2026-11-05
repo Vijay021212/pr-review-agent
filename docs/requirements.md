@@ -1,6 +1,6 @@
 # Requirements
 
-> **Status:** **v1.0 baseline, approved 2026-11-04** by Vijay Bolle. Changes now go through change control (see [section 13](#13-change-history)).
+> **Status:** **v1.2.** Baseline v1.0 approved 2026-11-04 by Vijay Bolle; later changes go through change control (see [section 13](#13-change-history)).
 > **Project:** `pr-review-agent` · **Owner and approver:** Vijay Bolle
 
 This document says **what** the agent must do and how we'll know it works. "v1" means the first full release of the software; the document's own versions (draft 0.x, baseline 1.0) are counted separately. It doesn't say **how** it's built; that goes in the design document. Words with a special meaning are explained in the [glossary](#12-glossary).
@@ -44,12 +44,13 @@ A PR review agent that:
 | US-8 | maintainer | know whether a change fits the way the codebase is already built, and meets its quality standards | the codebase stays consistent and easy to maintain, not just free of bugs |
 | US-9 | reviewer | get a clear recommendation with its reason, while keeping the final decision | I can act quickly without handing my judgement to a machine |
 | US-10 | developer | find out what went wrong when a review behaves strangely | I can fix the problem or report it with evidence |
+| US-11 | developer building tools | call the agent from my own Python code and get the review back as data | I can build it into my own tools and workflows |
 
 ## 4. Scope
 
 **In scope for v1**
 
-- GitHub pull requests, reviewed when you run one command on your own computer and give it the pull request's link.
+- GitHub pull requests, reviewed when you run one command on your own computer and give it the pull request's link, or from Python code through a small public API (FR-24).
 - A free local model through Ollama **by default**. A paid model provider can be configured instead (NFR-1).
 - Any text-based code can be reviewed, but quality is **measured on Python only**.
 
@@ -97,6 +98,7 @@ Priority uses **MoSCoW**: **Must** have, **Should** have, **Could** have. Requir
 | FR-14 | **A detailed summary of what the agent did,** posted on the pull request and shown in the terminal: what it understood the pull request is for (FR-2), the recommendation and the rule that decided it (FR-12), the commit reviewed (FR-19), files reviewed, files skipped (and why), related files it opened and searches it ran, findings posted, findings dropped by the check (and why), the model and provider used and the time taken. | Must | Test; Manual | [Shippie #328](https://github.com/mattzcarey/shippie/issues/328) (17 findings, 3 posted, no explanation); US-2, US-4 |
 | FR-22 | **One summary per pull request:** on a re-run the agent **updates its earlier summary** instead of adding a new one, noting the new commit reviewed and what changed since the last review. | Should | Test | [PR-Agent #2534](https://github.com/The-PR-Agent/pr-agent/issues/2534); US-3 |
 | FR-15 | **Dry run:** a `--dry-run` option shows the whole review in the terminal and writes nothing to GitHub, for trying the tool safely. | Should | Test | Safety |
+| FR-24 | **Usable as a Python library:** besides the command line, the agent can be used from Python code through a small, typed and documented **public API**: one call reviews a pull request and returns the whole result as data (understanding, findings, recommendation and what was reviewed or skipped). The command line is built on the same call, so both behave the same. Problems are raised as documented exceptions instead of exit codes. The public API follows Semantic Versioning: it changes incompatibly only in a new major version. The package is published to PyPI. | Should | Test (public API; the command line uses it); Manual (install from PyPI) | Owner decision, 2026-11-05; US-11 |
 | FR-16 | **Explain setup problems clearly:** Ollama not running, model not downloaded, model provider key missing or rejected, GitHub token missing or without permission, pull request not found. Each message says how to fix it. | Must | Test | Most of PR-Agent's most-discussed issues are setup and connection errors |
 | FR-23 | **Run log:** every run saves a local record of what the agent did: each step and tool call, the model, provider, settings and prompt version used, and the time each step took. It never contains secrets (FR-21). The log is how a strange review is investigated, and how evaluation results are reproduced. | Must | Test | Design review of v0.3; US-10 |
 | FR-17 | **Project rules file:** an optional file in the repository holds ignore patterns, extra sensitive areas on top of the built-in list ([5.3](#53-recommendation-rules)) and extra review instructions. | Could | Test | [PR-Agent #2384](https://github.com/The-PR-Agent/pr-agent/issues/2384), [Shippie #454](https://github.com/mattzcarey/shippie/issues/454) |
@@ -263,6 +265,7 @@ We studied the most-starred open-source PR reviewers on GitHub on 2026-11-03 and
 | Precision | Of the agent's findings, the share that are real problems |
 | Prompt injection | Text hidden in code or a description that tries to give the AI instructions |
 | Baseline | The approved version of this document; later changes go through change control |
+| Public API | The functions and types other developers may rely on; everything else in the package is internal and can change at any time (FR-24) |
 | ADR | Architecture decision record: a short note explaining one important design decision and why it was made |
 | Ollama | Free software that runs AI models on your own computer |
 | OpenAI-compatible API | A common way of talking to AI models over the internet, offered by most providers |
@@ -278,6 +281,7 @@ We studied the most-starred open-source PR reviewers on GitHub on 2026-11-03 and
 | v0.5 | 2026-11-04 | Second review. Paid models limited to OpenAI-compatible APIs plus Anthropic's API (owner decision); posting is all-or-nothing for findings, with the summary right after; clear definition of line accuracy; the model supplies findings and a "goal unclear" flag while code applies the rules; GitHub Enterprise out of scope; one review of a pull request at a time; evaluation run time added to R-3; glossary extended. Third review: "Approve" meaning matched to its rule; NFR-4 matched to FR-13's posting order; software "v1" told apart from document versions; minimum design-fit and quality cases in the evaluation. |
 | **v1.0** | 2026-11-04 | **Approved as the baseline** by Vijay Bolle. No content changes from v0.5. |
 | v1.1 | 2026-11-05 | Editorial only, no requirement changed: open questions replaced by links to the decisions (section 11); "Comes from" wording made neutral; basic glossary entries removed. |
+| v1.2 | 2026-11-05 | **Change request:** added FR-24 (usable as a Python library, Should), user story US-11, a scope line and the "Public API" glossary entry. Owner decision. |
 
 **ID changes in v0.3:**
 
