@@ -1,0 +1,22 @@
+{
+  "model": "qwen2.5-coder:7b",
+  "sample": "02-off-by-one-page",
+  "caught": true,
+  "other_findings": 0,
+  "seconds": 12.5,
+  "load_seconds": 0.0,
+  "tokens_written": 112,
+  "tokens_per_second": 12.1,
+  "planted_bug": "Pages start at 1, so start must be (page - 1) * page_size; page 1 skips the first page.",
+  "planted_line": 3,
+  "prompt": "Pull request title: Add pagination for the order list\nDescription: Adds paginate() so the order page can show 20 orders at a time. Pages start at 1.\n\n## Changes\n### pagination.py (new file)\n     1 + def paginate(items, page, page_size):\n     2 +     \"\"\"Return the items on a page. Pages are numbered from 1.\"\"\"\n     3 +     start = page * page_size\n     4 +     end = start + page_size\n     5 +     return items[start:end]",
+  "findings": [
+    {
+      "file": "pagination.py",
+      "line": 3,
+      "severity": "critical",
+      "category": "bug",
+      "explanation": "The calculation for the start index is incorrect. It should be `start = (page - 1) * page_size` to correctly handle pages starting from 1. Currently, it will return an empty list for the first page because `page * page_size` will be 0 for page 1."
+    }
+  ]
+}

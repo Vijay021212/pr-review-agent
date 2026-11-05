@@ -1,0 +1,14 @@
+{
+  "model": "qwen2.5-coder:7b",
+  "sample": "05-clean",
+  "caught": false,
+  "other_findings": 0,
+  "seconds": 5.9,
+  "load_seconds": 0.0,
+  "tokens_written": 8,
+  "tokens_per_second": 11.3,
+  "planted_bug": null,
+  "planted_line": null,
+  "prompt": "Pull request title: Add clamp() helper\nDescription: Adds clamp() to keep slider values inside their allowed range, with tests.\n\n## Changes\n### ranges.py (new file)\n     1 + def clamp(value, low, high):\n     2 +     \"\"\"Limit value to the range low..high (both included).\"\"\"\n     3 +     if low > high:\n     4 +         raise ValueError(\"low must not be greater than high\")\n     5 +     return max(low, min(value, high))\n\n### test_ranges.py (new file)\n     1 + import pytest\n     2 + \n     3 + from ranges import clamp\n     4 + \n     5 + \n     6 + def test_clamp_inside_range():\n     7 +     assert clamp(5, 0, 10) == 5\n     8 + \n     9 + \n    10 + def test_clamp_below_and_above():\n    11 +     assert clamp(-3, 0, 10) == 0\n    12 +     assert clamp(42, 0, 10) == 10\n    13 + \n    14 + \n    15 + def test_clamp_rejects_reversed_range():\n    16 +     with pytest.raises(ValueError):\n    17 +         clamp(1, 10, 0)",
+  "findings": []
+}

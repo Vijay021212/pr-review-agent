@@ -1,0 +1,22 @@
+{
+  "model": "qwen2.5-coder:7b",
+  "sample": "01-missing-none-check",
+  "caught": true,
+  "other_findings": 0,
+  "seconds": 18.2,
+  "load_seconds": 6.7,
+  "tokens_written": 85,
+  "tokens_per_second": 12.4,
+  "planted_bug": "users.get() returns None for an unknown id, so user['email'] raises TypeError.",
+  "planted_line": 4,
+  "prompt": "Pull request title: Add helper to look up a user's email\nDescription: Adds get_user_email() so the notification code can find where to send emails.\n\n## Changes\n### users.py (new file)\n     1 + def get_user_email(users, user_id):\n     2 +     \"\"\"Return the user's email address in lower case.\"\"\"\n     3 +     user = users.get(user_id)\n     4 +     return user[\"email\"].lower()",
+  "findings": [
+    {
+      "file": "users.py",
+      "line": 4,
+      "severity": "medium",
+      "category": "bug",
+      "explanation": "The function does not handle the case where the user is not found in the dictionary. This will raise a KeyError if `user_id` is not present in `users`."
+    }
+  ]
+}

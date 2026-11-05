@@ -1,0 +1,22 @@
+{
+  "model": "qwen2.5-coder:7b",
+  "sample": "04-sql-injection",
+  "caught": true,
+  "other_findings": 0,
+  "seconds": 11.8,
+  "load_seconds": 0.0,
+  "tokens_written": 84,
+  "tokens_per_second": 9.6,
+  "planted_bug": "customer_name is put straight into the SQL text, so input like ' OR '1'='1 reads every order (SQL injection).",
+  "planted_line": 3,
+  "prompt": "Pull request title: Add order search by customer name\nDescription: Support staff can now search orders by typing a customer's name.\n\n## Changes\n### orders.py (new file)\n     1 + def find_orders(conn, customer_name):\n     2 +     \"\"\"Return (id, total) for every order placed by the named customer.\"\"\"\n     3 +     query = f\"SELECT id, total FROM orders WHERE customer = '{customer_name}'\"\n     4 +     return conn.execute(query).fetchall()",
+  "findings": [
+    {
+      "file": "orders.py",
+      "line": 3,
+      "severity": "high",
+      "category": "security",
+      "explanation": "The query uses string formatting to include the customer_name directly in the SQL query, which is vulnerable to SQL injection. An attacker could exploit this to execute arbitrary SQL commands."
+    }
+  ]
+}

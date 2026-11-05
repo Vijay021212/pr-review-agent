@@ -1,0 +1,22 @@
+{
+  "model": "qwen2.5-coder:7b",
+  "sample": "03-breaks-a-caller",
+  "caught": true,
+  "other_findings": 0,
+  "seconds": 12.6,
+  "load_seconds": 0.0,
+  "tokens_written": 89,
+  "tokens_per_second": 10.4,
+  "planted_bug": "report.py calls round(average(scores), 1); round(None) raises TypeError for a student with no scores.",
+  "planted_line": 4,
+  "prompt": "Pull request title: Stop average() crashing on an empty list\nDescription: average([]) used to raise ZeroDivisionError. It now returns None for an empty list.\n\n## Changes\n### stats.py (modified)\n     1   def average(numbers):\n       -     \"\"\"Return the mean of the numbers.\"\"\"\n     2 +     \"\"\"Return the mean of the numbers, or None when the list is empty.\"\"\"\n     3 +     if not numbers:\n     4 +         return None\n     5       return sum(numbers) / len(numbers)\n\n## Related files (not changed)\n### report.py (unchanged)\n     1   from stats import average\n     2   \n     3   \n     4   def score_line(student, scores):\n     5       \"\"\"One line of the class report, e.g. \"Ana: 81.5\".\"\"\"\n     6       return f\"{student}: {round(average(scores), 1)}\"",
+  "findings": [
+    {
+      "file": "stats.py",
+      "line": 4,
+      "severity": "high",
+      "category": "bug",
+      "explanation": "The function now returns `None` when the list is empty, which can lead to a `TypeError` when `None` is passed to the `round()` function in `report.py`."
+    }
+  ]
+}
