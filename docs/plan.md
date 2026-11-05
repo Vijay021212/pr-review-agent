@@ -16,7 +16,7 @@ Each release **works end to end**. Version numbers follow [Semantic Versioning](
 | **v0.1.0 First review in the terminal** | Give it a pull request link with `--dry-run` and it prints a review: understanding, findings for levels 1–3, and a recommendation. Nothing is posted | #1–#13 |
 | **v0.2.0 Explores, double-checks and posts** | It explores related code on its own, double-checks findings, covers security and performance, and posts the review on GitHub | #14–#20 |
 | **v0.3.0 Measured** | An offline evaluation set gives scores per review level, published in the README | #21–#23 |
-| **v1.0.0 Complete** | Design-fit and quality checks, clean re-runs, the rules file, paid providers, the Python library on PyPI, and setup in five commands | #24–#29 |
+| **v1.0.0 Complete** | Design-fit and quality checks, clean re-runs, the rules file, paid providers, the Python library on PyPI, and setup in five commands | #24–#28, #30 |
 
 **Why this order:** the first release goes through every stage in the simplest way, so the whole path works early and problems show up early. Later releases make each stage smarter. Measuring (v0.3) comes before the last features, so each one can be shown to help.
 
@@ -70,8 +70,8 @@ Each release **works end to end**. Version numbers follow [Semantic Versioning](
 | 25 | **Clean re-runs:** fingerprints, skip resolved threads, update the one summary | FR-11, FR-22 | A second run on an unchanged pull request posts no duplicates and edits its summary | 19 | M |
 | 26 | **Project rules file,** read from the base branch | FR-17 | Ignore patterns, extra sensitive areas and instructions work; a change to the rules file in the pull request is ignored and mentioned | 7, 10 | S |
 | 27 | **Paid providers:** OpenAI-compatible and Anthropic wrappers | NFR-1, NFR-7, ADR-003 | Switching provider is a settings change only; tested with recorded replies; one real call checked by hand | 5 | M |
-| 29 | **Python library:** public API reference and examples, the PyPI package name, publishing to PyPI from CI | FR-24 | Every public name is documented with an example; a test fails if the public API changes without a version bump; `pip install` from PyPI works on Windows and Linux | 12 | M |
-| 28 | **Release v1.0.0:** setup in five commands, README with diagrams and scores, final evaluation, changelog | NFR-9, FR-18 | A fresh clone reaches its first review in five commands or fewer, following only the README | 23–27, 29 | M |
+| 30 | **Python library:** public API reference and examples, the PyPI package name, publishing to PyPI from CI | FR-24 | Every public name is documented with an example; a test fails if the public API changes without a version bump; `pip install` from PyPI works on Windows and Linux | 12 | M |
+| 28 | **Release v1.0.0:** setup in five commands, README with diagrams and scores, final evaluation, changelog | NFR-9, FR-18 | A fresh clone reaches its first review in five commands or fewer, following only the README | 23–27, 30 | M |
 
 Every FR and NFR appears in at least one row above. NFR-5 (safe tools and network) is spread across #6, #14, #15 and #18.
 
@@ -147,4 +147,4 @@ flowchart LR
 |---|---|---|
 | v0.1 | 2026-11-05 | First draft |
 | v1.0 | 2026-11-05 | Quality rule added (section 3: three test levels, self-review, coverage gate, milestone review); approved by Vijay Bolle |
-| v1.1 | 2026-11-05 | FR-24 (Python library): `py.typed` in #1, public function in #12, new issue #29 |
+| v1.1 | 2026-11-05 | FR-24 (Python library): `py.typed` in #1, public function in #12, new issue #30 (#29 is the change-request pull request: issues and pull requests share one number sequence) |
