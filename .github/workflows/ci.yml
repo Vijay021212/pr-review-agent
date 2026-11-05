@@ -1,0 +1,63 @@
+# Lints, type-checks and tests every push to main and every pull request.
+# The tests use fakes, so no model, Ollama or GitHub access is needed here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: the jobs only read the repository.
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the run that is now out of date.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: checks (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Let every combination finish, so one failure doesn't hide another.
+      fail-fast: false
+      matrix:
+        # Windows is the main platform (NFR-2); Linux keeps the code portable.
+        os: [windows-latest, ubuntu-latest]
+        python: ["3.12", "3.13"]
+    steps:
+      # Actions are pinned to a full commit SHA, because a tag can be moved to other code (NFR-6).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+
+      # --locked fails if uv.lock is out of date, so CI uses exactly the pinned versions.
+      - run: uv sync --locked
+
+      - run: uv run ruff check .
+
+      - run: uv run ruff format --check .
+
+      - run: uv run mypy
+
+      # Includes the 90% branch-coverage gate (pyproject.toml).
+      - run: uv run pytest
+
+  # The single check that branch protection requires: it passes only if every
+  # combination above passed, so the matrix can change without touching the protection rules.
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs: [checks]
+    runs-on: ubuntu-latest
+    steps:
+      - if: needs.checks.result != 'success'
+        run: exit 1
+      - run: echo "All checks passed."
