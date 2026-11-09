@@ -9,9 +9,9 @@ from typing import Any
 import httpx
 
 from pr_review_agent.domain import Deadline, ModelReply, ReviewIncomplete, SetupError
+from pr_review_agent.models import ANSWER_TOKENS
 from pr_review_agent.retry import send_with_retries
 
-ANSWER_TOKENS = 1024  # the longest answer the model may write (design section 4)
 CONNECT_SECONDS = 10.0
 
 
