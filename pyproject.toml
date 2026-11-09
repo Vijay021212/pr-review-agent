@@ -24,6 +24,7 @@ classifiers = [
 ]
 # Only packages our own code imports directly; uv.lock pins everything else.
 dependencies = [
+    "httpx>=0.28.1",  # calls to GitHub and the model providers
     "pydantic>=2.14.3",  # data types and validation of model output
     "pydantic-settings>=2.16.2",  # settings from PRRA_ environment variables and .env
 ]
