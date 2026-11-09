@@ -38,6 +38,17 @@ def test_a_prompt_without_a_version_line_is_an_error(raw: str) -> None:
         parse("broken", raw)
 
 
+def test_parts_are_filled_in() -> None:
+    parts = {"levels": "L1, L2\n"}
+    prompt = parse("x", "version: 1\nBefore\n{{part:levels}}\nAfter", lambda name: parts[name])
+    assert prompt.text == "Before\nL1, L2\nAfter"
+
+
+def test_a_missing_part_is_an_error() -> None:
+    with pytest.raises(FileNotFoundError):
+        parse("x", "version: 1\n{{part:no_such_part}}")
+
+
 def test_data_blocks_are_marked_at_both_ends() -> None:
     assert data_block("TITLE", "Add a discount") == (
         "<<<BEGIN TITLE>>>\nAdd a discount\n<<<END TITLE>>>"

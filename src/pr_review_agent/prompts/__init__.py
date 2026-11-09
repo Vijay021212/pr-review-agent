@@ -4,6 +4,10 @@ Each file starts with a version line, `version: 3`, followed by the prompt itsel
 version goes into the summary and the run log (FR-23), so a change in evaluation scores
 can be traced back to a change in a prompt. Change the version whenever the text changes.
 
+Text shared by several prompts, like the severity definitions, lives once in `parts/` and
+is included with `{{part:severity}}`. Changing a part changes every prompt that includes
+it, so bump those prompts' versions too.
+
 Pull request text and code go into the user message inside `data_block()` markers. Every
 prompt tells the model that what's inside them is data to review, never instructions
 (design section 7, NFR-5).
@@ -12,11 +16,13 @@ prompt tells the model that what's inside them is data to review, never instruct
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cache
 from importlib import resources
 
 _VERSION_LINE = re.compile(r"version: (\d+)")
+_PART = re.compile(r"\{\{part:([a-z_]+)\}\}")
 
 
 @dataclass(frozen=True)
@@ -33,21 +39,25 @@ class Prompt:
 
 @cache
 def load(name: str) -> Prompt:
-    """The prompt in `<name>.md`."""
-    raw = (
-        resources.files("pr_review_agent.prompts")
-        .joinpath(f"{name}.md")
-        .read_text(encoding="utf-8")
-    )
-    return parse(name, raw)
+    """The prompt in `<name>.md`, with its parts filled in."""
+    return parse(name, _read(f"{name}.md"))
 
 
-def parse(name: str, raw: str) -> Prompt:
+def parse(name: str, raw: str, read_part: Callable[[str], str] | None = None) -> Prompt:
     first_line, _, text = raw.partition("\n")
     version = _VERSION_LINE.fullmatch(first_line.strip())
     if version is None:
         raise ValueError(f"the prompt {name} must start with a line like 'version: 1'")
+    read = read_part or (lambda part: _read(f"parts/{part}.md"))
+    text = _PART.sub(lambda match: read(match[1]).strip(), text)
     return Prompt(name=name, version=int(version[1]), text=text.strip())
+
+
+def _read(path: str) -> str:
+    folder = resources.files("pr_review_agent.prompts")
+    for part in path.split("/"):
+        folder = folder.joinpath(part)
+    return folder.read_text(encoding="utf-8")
 
 
 def data_block(label: str, text: str) -> str:
