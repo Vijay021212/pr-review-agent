@@ -30,7 +30,9 @@ Each provider has its own request format, and its own way of forcing an answer i
 
 ```python
 class ChatModel(Protocol):
-    def complete_json(self, system: str, user: str, schema: dict, deadline: Deadline) -> ModelReply: ...
+    def complete_json(
+        self, system: str, user: str, schema: dict, deadline: Deadline
+    ) -> ModelReply: ...
 ```
 
 Each wrapper uses its provider's own way of getting JSON in a fixed shape (Ollama's `format`, OpenAI's `response_format`, Anthropic's forced tool call). The check against the Pydantic type and the one retry (FR-9) happen once, outside the wrappers, so every provider behaves the same way.

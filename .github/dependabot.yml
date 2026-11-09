@@ -1,0 +1,19 @@
+# Opens pull requests when pinned versions have updates, so the pins in CI and uv.lock
+# stay current and every update still goes through CI and review (NFR-6).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python-packages:
+        patterns: ["*"]
