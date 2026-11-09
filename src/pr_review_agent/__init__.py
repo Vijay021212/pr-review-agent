@@ -15,8 +15,7 @@ from pr_review_agent.domain import (
     SetupError,
     Understanding,
 )
-
-__version__ = "0.1.0.dev0"
+from pr_review_agent.version import __version__
 
 __all__ = [
     "CheckedFindings",
