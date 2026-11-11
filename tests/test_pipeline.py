@@ -20,6 +20,7 @@ from pr_review_agent.domain import (
 )
 from pr_review_agent.factory import Components
 from pr_review_agent.pipeline import run_review
+from pr_review_agent.runlog import RunLog
 from pr_review_agent.secrets import Masker
 from tests.builders import make_file, make_finding, make_pull_request
 from tests.fakes import FakeChatModel, FakeGitHub
@@ -49,9 +50,12 @@ def components(model: ChatModel, *pull_requests: Any, masker: Masker | None = No
     )
 
 
-def review(parts: Components, deadline: Deadline | None = None) -> Any:
+def review(
+    parts: Components, deadline: Deadline | None = None, run_log: RunLog | None = None
+) -> Any:
     ref = make_pull_request().ref
-    return run_review(ref, parts, Settings(), deadline or Deadline(600), dry_run=True)
+    log = run_log or RunLog.create(Settings().state_dir, ref, Masker())
+    return run_review(ref, parts, Settings(), deadline or Deadline(600), dry_run=True, run_log=log)
 
 
 def test_the_stages_run_in_order_and_are_timed() -> None:

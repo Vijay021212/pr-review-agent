@@ -21,7 +21,8 @@ def write_env_file(text: str) -> None:
     Path(".env").write_text(text, encoding="utf-8")
 
 
-def test_defaults_use_the_local_model() -> None:
+def test_defaults_use_the_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PRRA_STATE_DIR")
     settings = Settings()
     assert settings.provider is Provider.OLLAMA
     assert settings.model == "qwen2.5-coder:7b"
