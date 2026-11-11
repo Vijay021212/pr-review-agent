@@ -29,6 +29,9 @@ dependencies = [
     "pydantic-settings>=2.16.2",  # settings from PRRA_ environment variables and .env
 ]
 
+[project.scripts]
+pr-review-agent = "pr_review_agent.cli:main"
+
 [project.urls]
 Repository = "https://github.com/Vijay021212/pr-review-agent"
 Issues = "https://github.com/Vijay021212/pr-review-agent/issues"

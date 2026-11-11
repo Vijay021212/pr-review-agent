@@ -5,7 +5,7 @@
 
 An AI agent that reviews GitHub pull requests the way a careful senior engineer would: it understands the goal of the change, explores the related code on its own, finds real problems at five review levels, double-checks them, and posts one clear review with a recommendation. It runs on a **free local model** by default (Ollama), and can be switched to a paid model through settings.
 
-> **Status:** in development, not yet usable. Progress is tracked in the [issues](https://github.com/Vijay021212/pr-review-agent/issues), [milestones](https://github.com/Vijay021212/pr-review-agent/milestones) and [project board](https://github.com/users/Vijay021212/projects/2).
+> **Status:** in development. Reviews in the terminal (`--dry-run`) work; posting on GitHub comes in v0.2.0. Progress is tracked in the [issues](https://github.com/Vijay021212/pr-review-agent/issues), [milestones](https://github.com/Vijay021212/pr-review-agent/milestones) and [project board](https://github.com/users/Vijay021212/projects/2).
 
 ## Requirements
 
@@ -15,15 +15,46 @@ An AI agent that reviews GitHub pull requests the way a careful senior engineer 
 
 ## Install
 
-*Available from v0.1.0.*
+```powershell
+git clone https://github.com/Vijay021212/pr-review-agent
+cd pr-review-agent
+uv sync
+ollama pull qwen2.5-coder:7b
+```
 
 ## Usage
 
-*Available from v0.1.0.*
+```powershell
+uv run pr-review-agent review https://github.com/owner/repo/pull/7 --dry-run
+```
+
+The review is printed in the terminal: what the agent understood the pull request is for, the recommendation and the rule that decided it, every finding with its line, and what was reviewed or skipped. Progress messages go to the error stream, so `> review.md` saves the review alone. Posting the review on GitHub arrives in v0.2.0.
+
+Exit codes: `0` the review is complete; `1` the review is incomplete; `2` bad input or a setup problem, with a message saying how to fix it.
+
+From Python:
+
+```python
+from pr_review_agent import review_pull_request
+
+result = review_pull_request("https://github.com/owner/repo/pull/7", dry_run=True)
+print(result.recommendation.value, len(result.findings.kept))
+```
 
 ## Settings
 
-*Available from v0.1.0.* The full list is in [design section 10](docs/design.md#10-settings).
+Settings come from environment variables or a `.env` file in the folder you run the command from.
+
+| Setting | Default |
+|---|---|
+| `PRRA_PROVIDER` | `ollama` |
+| `PRRA_MODEL` | `qwen2.5-coder:7b` |
+| `PRRA_ENDPOINT` | `http://localhost:11434` |
+| `PRRA_GITHUB_TOKEN` | falls back to `GITHUB_TOKEN`; optional for public repositories |
+| `PRRA_CONTEXT_TOKENS` | `16384` |
+| `PRRA_TIME_LIMIT_MINUTES` | `20` |
+
+The full list is in [design section 10](docs/design.md#10-settings).
 
 ## How it works
 

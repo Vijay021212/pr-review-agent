@@ -118,6 +118,22 @@ def test_a_known_value_inside_another_is_masked_as_a_whole() -> None:
     assert masker("x abcdefghijklmnopqrst y") == "x ...qrst y"
 
 
+def test_masking_data_masks_every_string_inside_it() -> None:
+    masker = Masker(["my-company-token-0000-9876"])
+    data = {
+        "text": f"key {AWS_KEY}",
+        "nested": [{"token": "my-company-token-0000-9876"}, ("x", 3)],
+        "count": 3,
+        "flag": None,
+    }
+    assert masker.mask_data(data) == {
+        "text": "key AKIA...MPLE",
+        "nested": [{"token": "...9876"}, ["x", 3]],
+        "count": 3,
+        "flag": None,
+    }
+
+
 def test_known_values_and_patterns_work_together() -> None:
     masker = Masker(["my-company-token-0000-9876"])
     assert masker(f"{GITHUB_TOKEN} my-company-token-0000-9876") == "ghp_...Q7r8 ...9876"
