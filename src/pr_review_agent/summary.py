@@ -27,6 +27,7 @@ _STOPPED_BY = {
     ExploreStop.DONE: "the model had seen enough",
     ExploreStop.STEP_LIMIT: "the step limit was reached",
     ExploreStop.TIME_LIMIT: "its share of the time limit ran out",
+    ExploreStop.REPEATING: "the model kept repeating steps it had already taken",
 }
 
 

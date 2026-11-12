@@ -68,14 +68,21 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-class _Progress(logging.StreamHandler):  # type: ignore[type-arg]
-    """Shows the pipeline's progress messages on the error stream, one per line."""
+class _Progress(logging.Handler):
+    """Shows the pipeline's progress messages on the error stream, one per line.
+
+    It writes to whatever `sys.stderr` is at that moment, so it keeps working when the
+    stream is replaced (as tests and some terminals do) after it was set up.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        print(self.format(record), file=sys.stderr, flush=True)
 
 
 def _show_progress() -> None:
     logger = logging.getLogger("pr_review_agent")
     if not any(isinstance(handler, _Progress) for handler in logger.handlers):
-        handler = _Progress(sys.stderr)
+        handler = _Progress()
         handler.setFormatter(logging.Formatter("%(message)s"))
         logger.addHandler(handler)
     logger.setLevel(logging.INFO)

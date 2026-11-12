@@ -17,15 +17,14 @@ from pr_review_agent.domain import (
 )
 from pr_review_agent.selection import EXPLORED_TOKENS
 from pr_review_agent.stages import ModelCall
-from pr_review_agent.stages.explore import explore
+from pr_review_agent.stages.explore import ExploreStep, explore
 from tests.builders import make_file, make_pull_request, make_understanding
-from tests.fakes import EXPLORE_DONE, FakeChatModel
+from tests.fakes import EXPLORE_DONE, FakeChatModel, explore_step
 
 CHANGED = make_file("src/stats.py", ["def average(numbers):", "    return None"])
 
 
-def step(action: str, **fields: Any) -> str:
-    return json.dumps({"action": action, "reason": f"Because {action}.", **fields})
+step = explore_step
 
 
 @pytest.fixture
@@ -62,7 +61,7 @@ def test_done_at_once_runs_no_tool(repo: Path) -> None:
     assert [call.action for call in explored.tool_calls] == [ToolAction.DONE]
     assert explored.excerpts == ()
     assert explored.project_map.startswith("## Folder tree")
-    assert [call.prompt for call in calls] == ["explore v1"]
+    assert [call.prompt for call in calls] == ["explore v2"]
 
 
 def test_the_model_chooses_the_tools_step_by_step(repo: Path) -> None:
@@ -184,3 +183,44 @@ def test_a_review_without_reviewed_files_still_explores(repo: Path) -> None:
         max_steps=3,
     )
     assert "Diff of the most important files" not in model.calls[0].user
+
+
+def test_a_repeated_step_isnt_run_again_and_the_model_is_told(repo: Path) -> None:
+    search = step("search", text="average(")
+    model = FakeChatModel([search, step("search", text=" average( "), EXPLORE_DONE])
+    explored, _ = run(model, repo)
+    assert [c.result for c in explored.tool_calls] == [
+        "2 matches",
+        "repeated, not run again",
+        "done",
+    ]
+    assert "You already took exactly this step" in model.calls[2].user
+    assert explored.stopped_by is ExploreStop.DONE
+
+
+def test_a_second_repeat_ends_exploring(repo: Path) -> None:
+    opening = step("open_file", path="src/report.py")
+    model = FakeChatModel(
+        [opening, step("open_file", path="./src/report.py"), opening, EXPLORE_DONE]
+    )
+    explored, calls = run(model, repo)
+    assert explored.stopped_by is ExploreStop.REPEATING
+    assert len(calls) == 3
+    assert len(explored.excerpts) == 1  # the file was read once
+
+
+def test_the_same_file_from_another_line_isnt_a_repeat(repo: Path) -> None:
+    model = FakeChatModel(
+        [
+            step("open_file", path="src/report.py"),
+            step("open_file", path="src/report.py", start_line=3),
+            EXPLORE_DONE,
+        ]
+    )
+    explored, _ = run(model, repo)
+    assert [c.result for c in explored.tool_calls][:2] == ["lines 1-4 of 4", "lines 3-4 of 4"]
+
+
+def test_every_field_of_a_step_is_required() -> None:
+    schema = json.loads(json.dumps(ExploreStep.model_json_schema()))
+    assert set(schema["required"]) == {"action", "path", "text", "start_line", "reason", "notes"}

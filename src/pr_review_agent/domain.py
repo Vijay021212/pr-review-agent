@@ -183,6 +183,7 @@ class ExploreStop(StrEnum):
     DONE = "done"
     STEP_LIMIT = "step limit"
     TIME_LIMIT = "time limit"
+    REPEATING = "repeating"  # the model kept asking for steps it had already taken
 
 
 class RecommendationValue(StrEnum):

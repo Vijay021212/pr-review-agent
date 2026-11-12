@@ -71,7 +71,7 @@ def test_the_stages_run_in_order_and_are_timed() -> None:
         "recommend",
     ]
     assert all(timing.seconds >= 0 for timing in result.timings)
-    assert result.prompt_versions == ("understand v1", "explore v1", "find_a v1")
+    assert result.prompt_versions == ("understand v1", "explore v2", "find_a v1")
     assert (result.provider, result.model) == ("fake", "fake-model")
     assert result.dry_run
 

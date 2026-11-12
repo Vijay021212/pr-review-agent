@@ -145,6 +145,7 @@ def test_without_exploring_the_summary_says_so() -> None:
         (ExploreStop.DONE, "the model had seen enough"),
         (ExploreStop.STEP_LIMIT, "the step limit was reached"),
         (ExploreStop.TIME_LIMIT, "its share of the time limit ran out"),
+        (ExploreStop.REPEATING, "the model kept repeating steps it had already taken"),
     ],
 )
 def test_exploring_lists_files_opened_and_searches_and_why_it_stopped(

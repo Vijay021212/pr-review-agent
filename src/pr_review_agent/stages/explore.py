@@ -24,6 +24,7 @@ from pr_review_agent.domain import (
     Excerpt,
     ExploredContext,
     ExploreStop,
+    NonEmptyStr,
     PullRequest,
     ReviewScope,
     ToolAction,
@@ -42,19 +43,32 @@ DIFF_CHARS = 15000
 RESULT_CHARS = 10000
 NOTE_CHARS = 400
 EXCERPT_LINES = 60  # how much of each opened file the finding passes see
+MAX_REPEATS = 2  # exploring stops at the second step the model had already taken
+REPEATED = ToolResult(
+    output=(
+        "You already took exactly this step, and its result was shown then. "
+        "Choose a different step, or answer done."
+    ),
+    summary="repeated, not run again",
+)
 
 
 class ExploreStep(BaseModel):
-    """One answer of the loop: the next tool to use, why, and what was learned so far."""
+    """One answer of the loop: the next tool to use, why, and what was learned so far.
+
+    Every field is required in the schema, even those a tool doesn't use ("" or 1 then):
+    small models leave optional fields out, and the reason and notes are what make the
+    exploration useful and explainable.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     action: ToolAction
-    path: str = ""
-    text: str = ""
-    start_line: int = Field(default=1, ge=1)
-    reason: str = ""
-    notes: str = ""
+    path: str
+    text: str
+    start_line: int = Field(ge=1)
+    reason: NonEmptyStr
+    notes: str
 
 
 @dataclass(frozen=True)
@@ -84,6 +98,8 @@ def explore(
     steps: list[_Step] = []
     calls: list[ModelCall] = []
     notes: list[str] = []
+    seen: set[tuple[ToolAction, str, int]] = set()
+    repeats = 0
     stopped_by = ExploreStop.STEP_LIMIT
     for number in range(1, max_steps + 1):
         if deadline.elapsed() >= explore_until:
@@ -99,6 +115,17 @@ def explore(
             steps.append(_Step(answer, ToolResult(output="", summary="done")))
             stopped_by = ExploreStop.DONE
             break
+        key = _step_key(answer)
+        if key in seen:
+            # Small models can get stuck asking for the same step again and again. The
+            # step isn't run twice; the model is told so, and a second repeat ends exploring.
+            repeats += 1
+            steps.append(_Step(answer, REPEATED))
+            if repeats == MAX_REPEATS:
+                stopped_by = ExploreStop.REPEATING
+                break
+            continue
+        seen.add(key)
         steps.append(_Step(answer, tools.run(answer.action, _target(answer), answer.start_line)))
     explored = ExploredContext(
         project_map=project_map,
@@ -120,6 +147,14 @@ def explore(
 
 def _target(answer: ExploreStep) -> str:
     return answer.text if answer.action is ToolAction.SEARCH else answer.path
+
+
+def _step_key(answer: ExploreStep) -> tuple[ToolAction, str, int]:
+    """What makes two steps the same: the tool, its target and, for files, the start line."""
+    if answer.action is ToolAction.SEARCH:
+        return answer.action, answer.text.strip(), 1
+    start = answer.start_line if answer.action is ToolAction.OPEN_FILE else 1
+    return answer.action, normalize_path(answer.path), start
 
 
 @dataclass(frozen=True)
@@ -174,9 +209,9 @@ def _excerpts(steps: list[_Step]) -> tuple[Excerpt, ...]:
     kept: list[Excerpt] = []
     used = 0
     for step in reversed(steps):
-        if step.answer.action is not ToolAction.OPEN_FILE or step.result.output.startswith(
-            "Refused"
-        ):
+        opened = step.answer.action is ToolAction.OPEN_FILE
+        # Only real file contents count: not a refusal, and not the "already taken" note.
+        if not opened or step.result is REPEATED or step.result.output.startswith("Refused"):
             continue
         text = "\n".join(step.result.output.splitlines()[:EXCERPT_LINES])
         if used + len(text) > budget:

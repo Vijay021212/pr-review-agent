@@ -19,7 +19,7 @@ from pr_review_agent.domain import FileStatus, RecommendationValue
 from pr_review_agent.factory import Components
 from pr_review_agent.secrets import Masker
 from tests.builders import make_file, make_pull_request
-from tests.fakes import EXPLORE_DONE, FakeChatModel, FakeGitHub
+from tests.fakes import EXPLORE_DONE, FakeChatModel, FakeGitHub, explore_step
 
 LINK = "https://github.com/octo/shop/pull/7"
 
@@ -150,7 +150,7 @@ def test_the_command_line_prints_the_whole_review(
     assert "#### `src/cart.py` line 3" in out
     assert "- **What happens now:** ZeroDivisionError, and the checkout page fails." in out
     assert "- **Reviewed (1 file):** `src/cart.py`" in out
-    assert "prompts: understand v1, explore v1, find_a v1" in out
+    assert "prompts: understand v1, explore v2, find_a v1" in out
     # Progress went to the error stream, so the review itself can be saved cleanly.
     assert "Reading pull request octo/shop#7..." in captured.err
 
@@ -179,16 +179,14 @@ def test_exploring_finds_the_caller_and_the_finding_names_it(
         ),
     }
     steps = [
-        json.dumps({"action": "search", "text": "total(", "reason": "Find the callers."}),
-        json.dumps(
-            {
-                "action": "open_file",
-                "path": "src/checkout.py",
-                "reason": "Read the caller.",
-                "notes": "src/checkout.py:4 calls total() with every cart, empty ones included.",
-            }
+        explore_step("search", text="total(", reason="Find the callers."),
+        explore_step(
+            "open_file",
+            path="src/checkout.py",
+            reason="Read the caller.",
+            notes="src/checkout.py:4 calls total() with every cart, empty ones included.",
         ),
-        json.dumps({"action": "done", "reason": "The caller is understood."}),
+        explore_step("done", reason="The caller is understood."),
     ]
     world = World(monkeypatch, understanding(), *steps, found(BUG), repository=repository)
     assert cli.main(["review", LINK, "--dry-run"]) == 0
