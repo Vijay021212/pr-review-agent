@@ -4,6 +4,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-12
+
+The first review in the terminal: `pr-review-agent review <link> --dry-run` prints a complete review with a recommendation. Posting on GitHub comes in 0.2.0.
+
 ### Added
 
 - Project setup: Python package, ruff, strict mypy, pytest with a 90% branch-coverage gate, CI on Windows and Linux, Dependabot, pull request template ([#1](https://github.com/Vijay021212/pr-review-agent/issues/1)).
@@ -23,3 +27,6 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 ### Fixed
 
 - Reviews saved to a file on Windows are written as UTF-8; time limits under a minute are written in seconds; the "posting isn't available yet" message names `--dry-run` ([#44](https://github.com/Vijay021212/pr-review-agent/issues/44)).
+
+[Unreleased]: https://github.com/Vijay021212/pr-review-agent/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Vijay021212/pr-review-agent/releases/tag/v0.1.0
