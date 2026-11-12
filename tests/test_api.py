@@ -11,7 +11,7 @@ from pr_review_agent import Settings, SetupError, review_pull_request
 from pr_review_agent.factory import Components
 from pr_review_agent.secrets import Masker
 from tests.builders import make_pull_request
-from tests.fakes import FakeChatModel, FakeGitHub
+from tests.fakes import EXPLORE_DONE, FakeChatModel, FakeGitHub
 
 LINK = "https://github.com/octo/shop/pull/7"
 REPLIES = [
@@ -24,6 +24,7 @@ REPLIES = [
             "goal_source": "description",
         }
     ),
+    EXPLORE_DONE,
     json.dumps({"findings": []}),
 ]
 

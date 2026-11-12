@@ -8,6 +8,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 - The repository snapshot: the reviewed commit's files, downloaded from the fork for fork pull requests and unpacked safely into a temporary read-only folder that's removed after the review ([#14](https://github.com/Vijay021212/pr-review-agent/issues/14)).
 - The project map and the read-only explore tools: a code-built overview of the repository, and `list_dir`, `open_file` and `search` over the snapshot, which refuse paths outside it and never follow links ([#15](https://github.com/Vijay021212/pr-review-agent/issues/15)).
+- The explore stage: before looking for problems, the agent reads related code on its own, choosing one read-only tool at a time (search, open a file, list a folder) until it has seen enough, reaches the step limit or uses its share of the time; its notes and the code it opened go to the finding pass, and the summary and run log record every step ([#16](https://github.com/Vijay021212/pr-review-agent/issues/16)).
 
 ## [0.1.0] - 2026-11-12
 

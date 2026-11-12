@@ -112,8 +112,8 @@ class ReadOnlyTools:
 
     def _resolve(self, path: str) -> Path:
         """The real path for a repository path, refusing anything outside or through a link."""
-        clean = path.strip().replace("\\", "/").strip("/")
-        parts = PurePosixPath(clean).parts if clean not in ("", ".") else ()
+        clean = normalize_path(path)
+        parts = PurePosixPath(clean).parts if clean else ()
         current = self.root
         for part in parts:
             current = current / part
@@ -136,6 +136,15 @@ class ReadOnlyTools:
 
     def _relative(self, path: Path) -> str:
         return path.relative_to(self.root).as_posix()
+
+
+def normalize_path(path: str) -> str:
+    """A repository path the way GitHub writes it: "/" separators, no "./", no outer "/".
+
+    `./src\\app.py` becomes `src/app.py`. A ".." is kept, so `_resolve` can refuse it.
+    """
+    parts = path.strip().replace("\\", "/").split("/")
+    return "/".join(part for part in parts if part not in ("", "."))
 
 
 def _entry_line(entry: Path) -> str:

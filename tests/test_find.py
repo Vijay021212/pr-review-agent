@@ -172,6 +172,16 @@ def test_explored_code_is_shown_as_related_code() -> None:
     message = build_message(make_pull_request(), UNDERSTANDING, explored, (CART,))
     assert "## Related code (unchanged, for context)" in message
     assert "### src/shop.py (from line 10)\n10  total = discount(price)" in message
+    assert "Notes from exploring" not in message
+
+
+def test_notes_from_exploring_are_shown() -> None:
+    explored = ExploredContext(notes=("src/shop.py:10 calls discount() with a price of None.",))
+    message = build_message(make_pull_request(), UNDERSTANDING, explored, (CART,))
+    assert (
+        "## Notes from exploring the repository\n\n<<<BEGIN NOTES>>>\n"
+        "- src/shop.py:10 calls discount() with a price of None." in message
+    )
 
 
 def test_the_prompt_includes_the_levels_and_severities_word_for_word() -> None:

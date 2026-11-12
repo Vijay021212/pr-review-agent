@@ -1,6 +1,6 @@
 """Runs the review stages in a fixed order (design section 2, ADR-002).
 
-    fetch -> select files -> understand -> find problems -> recommend
+    fetch -> select files -> understand -> snapshot -> explore -> find problems -> recommend
 
 **Failure rule (NFR-4):** if any stage fails, or the hard time limit is reached, the
 pipeline stops at once and raises `ReviewIncomplete`: nothing more runs, no recommendation
@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 
 from pr_review_agent.config import Settings
 from pr_review_agent.domain import (
@@ -31,11 +31,13 @@ from pr_review_agent.domain import (
     StageTiming,
 )
 from pr_review_agent.factory import Components
+from pr_review_agent.github.snapshot import snapshot
 from pr_review_agent.recommendation import recommend
 from pr_review_agent.runlog import RunLog
 from pr_review_agent.selection import select_files
 from pr_review_agent.sensitive import find_sensitive
 from pr_review_agent.stages import ModelCall
+from pr_review_agent.stages.explore import explore
 from pr_review_agent.stages.fetch import fetch
 from pr_review_agent.stages.find import PASS_A, find_problems
 from pr_review_agent.stages.understand import understand
@@ -142,16 +144,36 @@ def _run_stages(
         understanding, call = understand(pull_request, scope, model, deadline)
         _record_calls(run_log, "understand", [call])
         calls.append(call)
-    explored = ExploredContext()
-    with stages.run("find", f"Looking for problems in {len(scope.batches)} batch(es) of files"):
-        found = find_problems(PASS_A, pull_request, scope, understanding, explored, model, deadline)
-        _record_calls(run_log, "find", found.calls)
-        calls += found.calls
-    findings = CheckedFindings(kept=found.findings, dropped=found.dropped)
-    _record_findings(run_log, findings)
-    with stages.run("recommend", "Applying the recommendation rules"):
-        changed_paths = [file.path for file in pull_request.files]
-        recommendation = recommend(findings, scope, understanding, find_sensitive(changed_paths))
+    # The snapshot stays until the review ends, and is removed even when a stage fails.
+    with ExitStack() as cleanup:
+        with stages.run("snapshot", "Downloading the repository at the reviewed commit"):
+            root = cleanup.enter_context(snapshot(components.github, pull_request, deadline))
+        with stages.run("explore", "Exploring related code"):
+            explored, explore_calls = explore(
+                pull_request,
+                scope,
+                understanding,
+                model,
+                deadline,
+                root,
+                max_steps=settings.explore_max_steps,
+            )
+            _record_calls(run_log, "explore", explore_calls)
+            _record_exploring(run_log, explored)
+            calls += explore_calls
+        with stages.run("find", f"Looking for problems in {len(scope.batches)} batch(es) of files"):
+            found = find_problems(
+                PASS_A, pull_request, scope, understanding, explored, model, deadline
+            )
+            _record_calls(run_log, "find", found.calls)
+            calls += found.calls
+        findings = CheckedFindings(kept=found.findings, dropped=found.dropped)
+        _record_findings(run_log, findings)
+        with stages.run("recommend", "Applying the recommendation rules"):
+            changed_paths = [file.path for file in pull_request.files]
+            recommendation = recommend(
+                findings, scope, understanding, find_sensitive(changed_paths)
+            )
 
     result = ReviewResult(
         pull_request=pull_request,
@@ -191,6 +213,24 @@ def _record_calls(
                 for reply in call.replies
             ],
         )
+
+
+def _record_exploring(run_log: RunLog, explored: ExploredContext) -> None:
+    """Every tool call the model made, and why exploring stopped (FR-23)."""
+    for call in explored.tool_calls:
+        run_log.record(
+            "tool call",
+            action=call.action,
+            target=call.target,
+            reason=call.reason,
+            result=call.result,
+        )
+    run_log.record(
+        "exploring stopped",
+        stopped_by=explored.stopped_by,
+        notes=list(explored.notes),
+        excerpts=[f"{e.path}:{e.start_line}" for e in explored.excerpts],
+    )
 
 
 def _record_findings(run_log: RunLog, findings: CheckedFindings) -> None:

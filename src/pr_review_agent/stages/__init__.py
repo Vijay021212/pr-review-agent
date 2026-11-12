@@ -6,7 +6,8 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from pr_review_agent.domain import ChatModel, Deadline, ModelReply
+from pr_review_agent.diff_text import render_file
+from pr_review_agent.domain import ChatModel, Deadline, ModelReply, PullRequest, ReviewScope
 from pr_review_agent.models.structured import ask_structured
 from pr_review_agent.prompts import Prompt
 
@@ -28,3 +29,22 @@ def ask[T: BaseModel](
         model, system=prompt.text, user=user, answer_type=answer_type, deadline=deadline
     )
     return answer.value, ModelCall(prompt.label, answer.replies, answer.retry_reason)
+
+
+def changed_files_list(pull_request: PullRequest, scope: ReviewScope) -> str:
+    """One line per changed file: its status and size, or why it was skipped."""
+    reasons = {skip.path: skip.reason for skip in scope.skipped}
+    lines = []
+    for file in pull_request.files:
+        reason = reasons.get(file.path)
+        size = f"+{len(file.added_lines)} -{len(file.removed_lines)}"
+        lines.append(f"- {file.path} ({file.status}, {f'skipped: {reason}' if reason else size})")
+    return "\n".join(lines)
+
+
+def most_important_diff(scope: ReviewScope) -> str:
+    """The numbered diffs of the first batch: the most important files, within the budget
+    (design section 6). Empty when nothing is reviewed."""
+    if not scope.batches:
+        return ""
+    return "\n\n".join(render_file(file) for file in scope.batches[0])

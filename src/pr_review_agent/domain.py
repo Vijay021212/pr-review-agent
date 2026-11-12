@@ -389,6 +389,7 @@ class ExploredContext(_Frozen):
     project_map: str = ""
     tool_calls: tuple[ToolCall, ...] = ()
     excerpts: tuple[Excerpt, ...] = ()
+    notes: tuple[NonEmptyStr, ...] = ()  # what the model wrote down as it explored
     stopped_by: ExploreStop | None = None  # None when exploring didn't run
 
 

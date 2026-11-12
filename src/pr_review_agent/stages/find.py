@@ -130,6 +130,9 @@ def build_message(
         data_block("TITLE", pull_request.title),
         data_block("DESCRIPTION", clip(pull_request.description, DESCRIPTION_CHARS) or "(empty)"),
     ]
+    if explored.notes:
+        notes = "\n".join(f"- {note}" for note in explored.notes)
+        parts += ["## Notes from exploring the repository", data_block("NOTES", notes)]
     if explored.excerpts:
         related = "\n\n".join(
             f"### {excerpt.path} (from line {excerpt.start_line})\n{excerpt.text}"

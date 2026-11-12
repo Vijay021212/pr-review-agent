@@ -70,3 +70,7 @@ class FakeGitHub:
             (root / path).write_text(text, encoding="utf-8")
         root.mkdir(exist_ok=True)
         return root
+
+
+EXPLORE_DONE = '{"action": "done", "reason": "The diff shows everything the review needs."}'
+"""The explore stage's answer when the model needs to read nothing more."""
