@@ -7,6 +7,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 ### Added
 
 - The repository snapshot: the reviewed commit's files, downloaded from the fork for fork pull requests and unpacked safely into a temporary read-only folder that's removed after the review ([#14](https://github.com/Vijay021212/pr-review-agent/issues/14)).
+- The project map and the read-only explore tools: a code-built overview of the repository, and `list_dir`, `open_file` and `search` over the snapshot, which refuse paths outside it and never follow links ([#15](https://github.com/Vijay021212/pr-review-agent/issues/15)).
 
 ## [0.1.0] - 2026-11-12
 
