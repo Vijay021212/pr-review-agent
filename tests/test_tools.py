@@ -207,7 +207,7 @@ def test_a_link_to_a_file_outside_is_never_followed(repo: ReadOnlyTools) -> None
     assert repo.run(ToolAction.OPEN_FILE, "src/leak.py").output == (
         "Refused: 'src/leak.py' goes through a link, which isn't followed"
     )
-    assert "secret" not in repo.search("secret").output
+    assert repo.search("secret").summary == "no matches"
     assert "leak.py  (link, not followed)" in repo.list_dir("src").output
 
 
