@@ -8,15 +8,24 @@ from typing import Any
 from pr_review_agent.domain import (
     Category,
     ChangedFile,
+    CheckedFindings,
     DiffLine,
+    ExploredContext,
     FileStatus,
     Finding,
     FindingStatus,
+    GoalSource,
     LineKind,
     PullRequest,
     PullRequestState,
+    Recommendation,
+    RecommendationValue,
     ReviewLevel,
+    ReviewResult,
+    ReviewScope,
     Severity,
+    StageTiming,
+    Understanding,
 )
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
@@ -81,3 +90,38 @@ def make_finding(**overrides: Any) -> Finding:
         **overrides,
     }
     return Finding(**values)
+
+
+def make_understanding(**overrides: Any) -> Understanding:
+    values: dict[str, Any] = {
+        "goal": "Give members a 10% discount.",
+        "summary": "Adds discount() and uses it in the cart total.",
+        "goal_unclear": False,
+        "goal_source": GoalSource.DESCRIPTION,
+        **overrides,
+    }
+    return Understanding(**values)
+
+
+def make_result(**overrides: Any) -> ReviewResult:
+    """A complete review of `make_pull_request()` with no findings."""
+    pull_request = overrides.pop("pull_request", make_pull_request())
+    values: dict[str, Any] = {
+        "pull_request": pull_request,
+        "scope": ReviewScope(batches=(pull_request.files,) if pull_request.files else ()),
+        "understanding": make_understanding(),
+        "explored": ExploredContext(),
+        "findings": CheckedFindings(),
+        "recommendation": Recommendation(
+            value=RecommendationValue.APPROVE,
+            rule=3,
+            reasons=("Every changed file was reviewed, the goal is clear, and nothing was found",),
+        ),
+        "provider": "ollama",
+        "model": "qwen2.5-coder:7b",
+        "prompt_versions": ("understand v1", "find_a v1"),
+        "timings": (StageTiming(stage="fetch", seconds=2), StageTiming(stage="find", seconds=43)),
+        "dry_run": True,
+        **overrides,
+    }
+    return ReviewResult(**values)
