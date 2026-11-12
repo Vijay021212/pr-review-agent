@@ -5,9 +5,14 @@ The command line is built on this same function, so both always behave the same.
 
 from __future__ import annotations
 
+import logging
+
 from pr_review_agent import factory, pipeline
 from pr_review_agent.config import Settings
 from pr_review_agent.domain import Deadline, PullRequestRef, ReviewResult, SetupError
+from pr_review_agent.runlog import RunLog
+
+log = logging.getLogger("pr_review_agent")
 
 
 def review_pull_request(
@@ -21,7 +26,9 @@ def review_pull_request(
         print(result.recommendation.value, len(result.findings.kept))
 
     With no `settings`, they're read from the `PRRA_` environment variables and `.env`, as
-    for the command line. With `dry_run=True` nothing is written to GitHub.
+    for the command line. With `dry_run=True` nothing is written to GitHub. Every run
+    writes a run log to `<state dir>/runs/`; its path is logged to the `pr_review_agent`
+    logger when the review starts.
 
     Raises `SetupError` for bad input or a setup problem (the message says how to fix it),
     and `ReviewIncomplete` when the review couldn't be completed.
@@ -35,5 +42,9 @@ def review_pull_request(
             "posting it.",
         )
     components = factory.build(settings)
+    run_log = RunLog.create(settings.state_dir, ref, components.masker)
+    log.info("Run log: %s", run_log.path)
     deadline = Deadline(settings.time_limit_seconds)
-    return pipeline.run_review(ref, components, settings, deadline, dry_run=dry_run)
+    return pipeline.run_review(
+        ref, components, settings, deadline, dry_run=dry_run, run_log=run_log
+    )
