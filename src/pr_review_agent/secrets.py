@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from typing import Any
 
 # Values shorter than this are masked completely: their last 4 characters would give away
 # too much of them.
@@ -115,6 +116,16 @@ class Masker:
             position = match.end
         parts.append(text[position:])
         return "".join(parts)
+
+    def mask_data(self, value: Any) -> Any:
+        """`value` with every string inside it masked: for JSON-like data (dicts, lists)."""
+        if isinstance(value, str):
+            return self(value)
+        if isinstance(value, dict):
+            return {key: self.mask_data(item) for key, item in value.items()}
+        if isinstance(value, list | tuple):
+            return [self.mask_data(item) for item in value]
+        return value
 
 
 mask = Masker()

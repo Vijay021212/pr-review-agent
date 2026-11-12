@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from pr_review_agent.domain import Deadline, ModelReply
+from pr_review_agent.domain import Deadline, ModelReply, PullRequest, PullRequestRef, SetupError
 
 
 @dataclass(frozen=True)
@@ -33,3 +33,21 @@ class FakeChatModel:
         return ModelReply(
             text=self.replies.pop(0), model=self.model, input_tokens=10, output_tokens=5
         )
+
+
+@dataclass
+class FakeGitHub:
+    """Serves pull requests from memory; an unknown one is "not found", as on GitHub."""
+
+    pull_requests: dict[str, PullRequest] = field(default_factory=dict)
+    reads: list[PullRequestRef] = field(default_factory=list)
+
+    @classmethod
+    def serving(cls, *pull_requests: PullRequest) -> FakeGitHub:
+        return cls({str(pr.ref): pr for pr in pull_requests})
+
+    def get_pull_request(self, ref: PullRequestRef, deadline: Deadline) -> PullRequest:
+        self.reads.append(ref)
+        if str(ref) not in self.pull_requests:
+            raise SetupError(f"GitHub couldn't find pull request {ref}.", "Check the link.")
+        return self.pull_requests[str(ref)]
