@@ -16,10 +16,13 @@ from pr_review_agent.domain import (
     FileStatus,
     PullRequestRef,
     PullRequestState,
+    ReviewComment,
     ReviewIncomplete,
     SetupError,
+    Side,
 )
 from pr_review_agent.github.rest import GitHubRest
+from tests.builders import SHA
 
 FIXTURES = Path(__file__).parent / "fixtures" / "github"
 REF = PullRequestRef(owner="Vijay021212", repo="pr-review-agent", number=32)
@@ -294,7 +297,7 @@ def test_other_errors_make_the_review_incomplete() -> None:
     api = FakeApi({f"{REPO}/pulls/32": httpx.Response(422, json={"message": "Validation Failed"})})
     with pytest.raises(
         ReviewIncomplete,
-        match=r"GitHub answered 422 when reading pull request .*: Validation Failed",
+        match=r"GitHub answered 422 when trying to read pull request .*: Validation Failed",
     ):
         read(make_github(api))
 
@@ -341,3 +344,148 @@ def test_a_rate_limit_longer_than_the_time_limit_stops_the_review() -> None:
     api = FakeApi({f"{REPO}/pulls/32": limited})
     with pytest.raises(ReviewIncomplete, match="would pass the time limit"):
         read(make_github(api))
+
+
+# --- Posting ---------------------------------------------------------------------------
+
+
+def writer(api: Callable[[httpx.Request], httpx.Response]) -> GitHubRest:
+    return make_github(api)
+
+
+def test_the_head_commit_is_read_again() -> None:
+    assert read_head() == "ccd3c701eea7747e3065294e19d09d2fd1fc659d"
+
+
+def read_head() -> str:
+    return make_github(FakeApi()).head_sha(REF, Deadline(60))
+
+
+def test_a_review_is_one_request_with_every_comment_and_never_an_approval() -> None:
+    sent: list[httpx.Request] = []
+
+    def api(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={"html_url": "https://github.com/x/pull/32#review-9"})
+
+    comments = (
+        ReviewComment(path="src/a.py", line=3, side=Side.NEW, body="New code."),
+        ReviewComment(path="src/a.py", line=7, side=Side.OLD, body="Removed code."),
+    )
+    url = make_github(api).post_review(REF, SHA, "Found 2.", comments, Deadline(60))
+    assert url == "https://github.com/x/pull/32#review-9"
+    (request,) = sent
+    assert (request.method, request.url.path) == ("POST", f"{REPO}/pulls/32/reviews")
+    body = json.loads(request.content)
+    assert body["event"] == "COMMENT"
+    assert body["commit_id"] == SHA
+    assert body["comments"] == [
+        {"path": "src/a.py", "line": 3, "side": "RIGHT", "body": "New code."},
+        {"path": "src/a.py", "line": 7, "side": "LEFT", "body": "Removed code."},
+    ]
+
+
+@pytest.mark.parametrize("failure", [httpx.Response(502), httpx.ReadTimeout("no answer")])
+def test_a_failed_post_is_never_sent_twice(failure: httpx.Response | Exception) -> None:
+    calls: list[httpx.Request] = []
+
+    def api(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if isinstance(failure, Exception):
+            raise failure
+        return failure
+
+    with pytest.raises(ReviewIncomplete):
+        make_github(api).post_review(REF, SHA, "b", (), Deadline(60))
+    assert len(calls) == 1
+
+
+def test_a_rate_limited_post_is_retried_because_it_was_refused() -> None:
+    replies = [
+        httpx.Response(429, headers={"retry-after": "2"}),
+        httpx.Response(200, json={"html_url": "u"}),
+    ]
+    waits: list[float] = []
+    github = make_github(lambda request: replies.pop(0), waits=waits)
+    assert github.post_review(REF, SHA, "b", (), Deadline(60)) == "u"
+    assert waits == [2.0]
+
+
+def test_a_token_that_cant_post_says_how_to_fix_it() -> None:
+    api = FakeApi({f"{REPO}/pulls/32/reviews": httpx.Response(403, json={"message": "no"})})
+    with pytest.raises(SetupError, match="isn't allowed to post the review") as caught:
+        make_github(api).post_review(REF, SHA, "b", (), Deadline(60))
+    assert "Pull requests: write" in caught.value.fix
+
+
+def test_a_comment_github_refuses_makes_the_review_incomplete() -> None:
+    refused = httpx.Response(422, json={"message": "Line could not be resolved"})
+    api = FakeApi({f"{REPO}/pulls/32/reviews": refused})
+    with pytest.raises(ReviewIncomplete, match="422 when trying to post the review: Line could"):
+        make_github(api).post_review(REF, SHA, "b", (), Deadline(60))
+
+
+class CommentsApi:
+    """GitHub's issue comments: listed in pages, edited, and created."""
+
+    def __init__(self, *existing: dict[str, Any], edit_status: int = 200) -> None:
+        self.existing = list(existing)
+        self.edit_status = edit_status
+        self.requests: list[httpx.Request] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        path = request.url.path
+        if request.method == "GET":
+            page = int(request.url.params["page"])
+            return httpx.Response(200, json=self.existing[(page - 1) * 100 : page * 100])
+        if request.method == "PATCH":
+            return httpx.Response(self.edit_status, json={"html_url": f"edited:{path}"})
+        return httpx.Response(201, json={"html_url": "created"})
+
+
+def upsert(api: CommentsApi) -> str:
+    return make_github(api).upsert_summary(
+        REF, "<!-- m -->\nNew summary", "<!-- m -->", Deadline(60)
+    )
+
+
+def test_a_first_summary_is_posted_as_a_new_comment() -> None:
+    api = CommentsApi({"id": 1, "body": "Looks good to me!"})
+    assert upsert(api) == "created"
+    post_request = api.requests[-1]
+    assert (post_request.method, post_request.url.path) == ("POST", f"{REPO}/issues/32/comments")
+    assert json.loads(post_request.content) == {"body": "<!-- m -->\nNew summary"}
+
+
+def test_an_earlier_summary_is_updated_instead_of_repeated() -> None:
+    api = CommentsApi(
+        {"id": 5, "body": "<!-- m -->\nOld summary"},
+        {"id": 6, "body": "A person's comment"},
+        {"id": 8, "body": "<!-- m -->\nA newer summary"},
+        {"id": 9, "body": None},
+    )
+    assert upsert(api) == f"edited:{REPO}/issues/comments/8"
+    assert [r.method for r in api.requests] == ["GET", "PATCH"]
+
+
+def test_summaries_are_found_across_pages_of_comments() -> None:
+    comments = [{"id": n, "body": "chat"} for n in range(150)]
+    comments[120] = {"id": 120, "body": "<!-- m -->\nOld"}
+    api = CommentsApi(*comments)
+    assert upsert(api) == f"edited:{REPO}/issues/comments/120"
+
+
+@pytest.mark.parametrize("status", [403, 404])
+def test_a_summary_that_cant_be_edited_is_posted_anew(status: int) -> None:
+    api = CommentsApi(
+        {"id": 5, "body": "<!-- m -->\nSomeone quoted the marker"}, edit_status=status
+    )
+    assert upsert(api) == "created"
+    assert [r.method for r in api.requests] == ["GET", "PATCH", "POST"]
+
+
+def test_the_summary_search_stops_after_githubs_last_page() -> None:
+    api = CommentsApi(*[{"id": n, "body": "chat"} for n in range(3000)])
+    assert upsert(api) == "created"
+    assert sum(1 for r in api.requests if r.method == "GET") == 30

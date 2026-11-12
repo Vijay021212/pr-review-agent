@@ -40,12 +40,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return EXIT_SETUP
     except ReviewIncomplete as error:
-        print(masker(f"{error}. Nothing was posted."), file=sys.stderr)
+        posted = "" if error.partly_posted else " Nothing was posted."
+        print(masker(f"{error}.{posted}"), file=sys.stderr)
         return EXIT_INCOMPLETE
     except KeyboardInterrupt:
         print("Stopped. The review is incomplete and nothing was posted.", file=sys.stderr)
         return EXIT_INCOMPLETE
     print(render_summary(result, masker, with_details=True))
+    if result.summary_url:
+        if result.review_url:
+            print(f"Findings posted: {result.review_url}", file=sys.stderr)
+        print(f"Summary posted: {result.summary_url}", file=sys.stderr)
     return EXIT_COMPLETE
 
 

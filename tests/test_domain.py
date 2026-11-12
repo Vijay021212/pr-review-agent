@@ -26,7 +26,6 @@ from pr_review_agent.domain import (
     GoalSource,
     LineKind,
     ModelReply,
-    PullRequest,
     PullRequestRef,
     Recommendation,
     RecommendationValue,
@@ -43,6 +42,7 @@ from pr_review_agent.domain import (
     Understanding,
 )
 from tests.builders import SHA, make_file, make_finding, make_pull_request
+from tests.fakes import FakeGitHub
 
 
 class FakeClock:
@@ -418,27 +418,14 @@ class ScriptedModel:
         return ModelReply(text='{"ok": true}', model=self.model)
 
 
-class OnePullRequest:
-    """The smallest class that satisfies GitHub."""
-
-    def get_pull_request(self, ref: PullRequestRef, deadline: Deadline) -> PullRequest:
-        return make_pull_request(owner=ref.owner, repo=ref.repo, number=ref.number)
-
-    def download_snapshot(
-        self, pull_request: PullRequest, folder: Path, deadline: Deadline
-    ) -> Path:
-        return folder
-
-
 def test_any_class_with_the_right_methods_fits_the_interfaces(tmp_path: Path) -> None:
+    """mypy checks the assignments: a class needs only the right methods, no base class."""
     model: ChatModel = ScriptedModel()
-    github: GitHub = OnePullRequest()
+    github: GitHub = FakeGitHub.serving(make_pull_request(owner="a", repo="b", number=3))
     deadline = Deadline(10)
     assert model.complete_json("system", "user", {}, deadline).text == '{"ok": true}'
     ref = PullRequestRef(owner="a", repo="b", number=3)
-    pull_request = github.get_pull_request(ref, deadline)
-    assert pull_request.number == 3
-    assert github.download_snapshot(pull_request, tmp_path, deadline) == tmp_path
+    assert github.get_pull_request(ref, deadline).number == 3
 
 
 def test_domain_depends_only_on_the_standard_library_and_pydantic() -> None:

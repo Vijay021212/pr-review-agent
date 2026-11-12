@@ -41,6 +41,7 @@ def send_with_retries(
     temporary: Callable[[httpx.Response], bool] = is_temporary,
     wait_for: Callable[[httpx.Response], float | None] = retry_after,
     sleep: Callable[[float], None] = time.sleep,
+    retry_network_errors: bool = True,
 ) -> httpx.Response:
     """Call `send` until it gives a lasting answer, and return that response.
 
@@ -48,6 +49,10 @@ def send_with_retries(
     those are for the caller to explain. `httpx.ConnectError` is passed straight to the
     caller, because "nothing is listening" usually means a setup problem (Ollama not
     started), not a blip; other network errors and timeouts are retried.
+
+    A write that may already have happened (posting a review) passes
+    `retry_network_errors=False`: when the connection drops, nobody knows whether GitHub
+    received it, so sending it again could post it twice. The review stops and says so.
     """
     attempt = 0
     while True:
@@ -59,6 +64,11 @@ def send_with_retries(
             raise
         except httpx.TransportError as error:  # timeouts and dropped connections
             problem = f"{type(error).__name__}: {error}" if str(error) else type(error).__name__
+            if not retry_network_errors:
+                raise ReviewIncomplete(
+                    f"the connection to {service} failed while sending ({problem}); it may or "
+                    "may not have arrived, so it wasn't sent again"
+                ) from error
         else:
             if not temporary(response):
                 return response

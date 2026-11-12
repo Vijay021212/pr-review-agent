@@ -45,9 +45,11 @@ class ReviewIncomplete(Exception):
     and no recommendation is given, so a broken review never looks like a clean one.
     """
 
-    def __init__(self, reason: str) -> None:
+    def __init__(self, reason: str, *, partly_posted: bool = False) -> None:
         super().__init__(f"The review is incomplete: {reason}")
         self.reason = reason
+        # True when the findings reached GitHub but the summary didn't (FR-13, NFR-4).
+        self.partly_posted = partly_posted
 
 
 class TimeLimitReached(ReviewIncomplete):
@@ -475,7 +477,8 @@ class ReviewResult(_Frozen):
     prompt_versions: tuple[NonEmptyStr, ...] = ()  # for example "understand v1"
     timings: tuple[StageTiming, ...] = ()
     dry_run: bool
-    review_url: str | None = None  # where the findings were posted, if they were
+    review_url: str | None = None  # where the findings were posted, if there were any
+    summary_url: str | None = None  # where the summary was posted; None for a dry run
 
     @property
     def seconds(self) -> float:
@@ -526,6 +529,15 @@ class Deadline:
 # --- Interfaces --------------------------------------------------------------------------
 
 
+class ReviewComment(_Frozen):
+    """One inline comment of a posted review: on a changed line, in new or removed code."""
+
+    path: NonEmptyStr
+    line: LineNumber
+    side: Side
+    body: NonEmptyStr
+
+
 class ModelReply(_Frozen):
     """One answer from a model, before it's checked against the expected type."""
 
@@ -566,4 +578,25 @@ class GitHub(Protocol):
         self, pull_request: PullRequest, folder: Path, deadline: Deadline
     ) -> Path:
         """Unpack the repository at the reviewed commit into `folder`; return its root."""
+        ...
+
+    def head_sha(self, ref: PullRequestRef, deadline: Deadline) -> str:
+        """The pull request's head commit right now, to check it hasn't moved (FR-19)."""
+        ...
+
+    def post_review(
+        self,
+        ref: PullRequestRef,
+        commit_sha: str,
+        body: str,
+        comments: tuple[ReviewComment, ...],
+        deadline: Deadline,
+    ) -> str:
+        """Post every comment in one review of type "comment" (FR-12, FR-13); its link."""
+        ...
+
+    def upsert_summary(
+        self, ref: PullRequestRef, body: str, marker: str, deadline: Deadline
+    ) -> str:
+        """Update the comment starting with `marker`, or post a new one (FR-22); its link."""
         ...

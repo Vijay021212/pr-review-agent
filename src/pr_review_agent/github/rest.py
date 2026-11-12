@@ -18,8 +18,10 @@ from pr_review_agent.domain import (
     PullRequest,
     PullRequestRef,
     PullRequestState,
+    ReviewComment,
     ReviewIncomplete,
     SetupError,
+    Side,
 )
 from pr_review_agent.github.diff import parse_patch
 from pr_review_agent.github.snapshot import MAX_SNAPSHOT_BYTES, unpack, write_limited
@@ -138,6 +140,77 @@ class GitHubRest:
         finally:
             archive.unlink(missing_ok=True)  # only the unpacked files are kept
 
+    def head_sha(self, ref: PullRequestRef, deadline: Deadline) -> str:
+        path = f"/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}"
+        sha: str = self._get(path, deadline, f"pull request {ref}")["head"]["sha"]
+        return sha
+
+    def post_review(
+        self,
+        ref: PullRequestRef,
+        commit_sha: str,
+        body: str,
+        comments: tuple[ReviewComment, ...],
+        deadline: Deadline,
+    ) -> str:
+        review = {
+            "commit_id": commit_sha,
+            "body": body,
+            # Always a plain comment: the agent never approves or blocks (FR-12).
+            "event": "COMMENT",
+            "comments": [
+                {
+                    "path": comment.path,
+                    "line": comment.line,
+                    "side": "RIGHT" if comment.side is Side.NEW else "LEFT",
+                    "body": comment.body,
+                }
+                for comment in comments
+            ],
+        }
+        path = f"/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}/reviews"
+        url: str = self._write("POST", path, review, deadline, "the review")["html_url"]
+        return url
+
+    def upsert_summary(
+        self, ref: PullRequestRef, body: str, marker: str, deadline: Deadline
+    ) -> str:
+        repo_path = f"/repos/{ref.owner}/{ref.repo}"
+        earlier = self._earlier_summary(ref, marker, deadline)
+        if earlier is not None:
+            response = self._send(
+                f"{repo_path}/issues/comments/{earlier}",
+                deadline,
+                method="PATCH",
+                body={"body": body},
+            )
+            # Someone else's comment can carry the marker too; then a new one is posted.
+            if response.status_code not in (403, 404):
+                url: str = self._check(response, "the summary", doing="update")["html_url"]
+                return url
+        new: str = self._write(
+            "POST",
+            f"{repo_path}/issues/{ref.number}/comments",
+            {"body": body},
+            deadline,
+            "the summary",
+        )["html_url"]
+        return new
+
+    def _earlier_summary(self, ref: PullRequestRef, marker: str, deadline: Deadline) -> int | None:
+        """The id of the newest comment that starts with `marker`, if there is one."""
+        path = f"/repos/{ref.owner}/{ref.repo}/issues/{ref.number}/comments"
+        found = None
+        for page in range(1, MAX_LISTED_FILES // FILES_PER_PAGE + 1):
+            params = {"per_page": FILES_PER_PAGE, "page": page}
+            comments = self._get(path, deadline, "the pull request's comments", params=params)
+            for comment in comments:
+                if (comment.get("body") or "").startswith(marker):
+                    found = int(comment["id"])
+            if len(comments) < FILES_PER_PAGE:
+                break
+        return found
+
     def _changed_files(self, ref: PullRequestRef, deadline: Deadline) -> tuple[ChangedFile, ...]:
         files: list[ChangedFile] = []
         path = f"/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}/files"
@@ -181,12 +254,15 @@ class GitHubRest:
         *,
         params: dict[str, int] | None = None,
         stream: bool = False,
+        method: str = "GET",
+        body: dict[str, Any] | None = None,
     ) -> httpx.Response:
         def send() -> httpx.Response:
             request = self._client.build_request(
-                "GET",
+                method,
                 self._base_url + path,
                 params=params,
+                json=body,
                 headers=self._headers,
                 timeout=min(REQUEST_SECONDS, max(deadline.remaining(), 1.0)),
             )
@@ -197,32 +273,46 @@ class GitHubRest:
                 response.read()  # error bodies are small; reading them lets the checks see them
             return response
 
+        # A write that failed with a server error or a dropped connection may still have
+        # happened, so it's never sent again; only a rate limit (refused, so not done) is.
+        write = method != "GET"
         return send_with_retries(
             send,
             service="GitHub",
             deadline=deadline,
-            temporary=self._is_temporary,
+            temporary=self._is_rate_limit if write else self._is_temporary,
             wait_for=self._wait_for,
             sleep=self._sleep,
+            retry_network_errors=not write,
         )
 
-    def _check(self, response: httpx.Response, what: str) -> Any:
+    def _write(
+        self, method: str, path: str, body: dict[str, Any], deadline: Deadline, what: str
+    ) -> Any:
+        return self._check(self._send(path, deadline, method=method, body=body), what, doing="post")
+
+    def _check(self, response: httpx.Response, what: str, *, doing: str = "read") -> Any:
         """The response's JSON, or a clear error saying what went wrong and how to fix it."""
         if response.status_code == 401:
             raise SetupError("GitHub rejected the token.", _ACCESS_FIX)
         if response.status_code == 403:
-            raise SetupError(f"The GitHub token isn't allowed to read {what}.", _ACCESS_FIX)
+            raise SetupError(f"The GitHub token isn't allowed to {doing} {what}.", _ACCESS_FIX)
         if response.status_code == 404:
             raise SetupError(f"GitHub couldn't find {what}.", _NOT_FOUND_FIX)
         if response.is_error:
             raise ReviewIncomplete(
-                f"GitHub answered {response.status_code} when reading {what}: {_message(response)}"
+                f"GitHub answered {response.status_code} when trying to {doing} {what}: "
+                f"{_message(response)}"
             )
         return response.json()
 
     def _is_temporary(self, response: httpx.Response) -> bool:
         """5xx and 429, plus 403 when it's a rate limit rather than a missing permission."""
-        if is_temporary(response):
+        return is_temporary(response) or self._is_rate_limit(response)
+
+    def _is_rate_limit(self, response: httpx.Response) -> bool:
+        """429, or a 403 that's a rate limit rather than a missing permission."""
+        if response.status_code == 429:
             return True
         return response.status_code == 403 and (
             response.headers.get("x-ratelimit-remaining") == "0"

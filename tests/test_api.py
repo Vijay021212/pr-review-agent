@@ -73,10 +73,13 @@ def test_a_bad_link_is_a_setup_error(built: list[Settings]) -> None:
     assert built == []
 
 
-def test_posting_isnt_available_yet(built: list[Settings]) -> None:
-    with pytest.raises(SetupError, match="Posting the review on GitHub isn't available") as caught:
+def test_posting_needs_a_token(built: list[Settings]) -> None:
+    with pytest.raises(
+        SetupError, match="Posting the review on GitHub needs a GitHub token"
+    ) as caught:
         review_pull_request(LINK)
-    assert caught.value.fix.startswith("Add --dry-run to the command (in Python, dry_run=True)")
+    assert "PRRA_GITHUB_TOKEN" in caught.value.fix
+    assert "--dry-run" in caught.value.fix
     assert built == []
 
 

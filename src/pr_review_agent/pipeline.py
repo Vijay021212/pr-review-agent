@@ -1,7 +1,7 @@
 """Runs the review stages in a fixed order (design section 2, ADR-002).
 
     fetch -> select files -> understand -> snapshot -> explore -> find (passes A, B)
-    -> double-check -> recommend
+    -> double-check -> recommend -> publish (unless it is a dry run)
 
 **Failure rule (NFR-4):** if any stage fails, or the hard time limit is reached, the
 pipeline stops at once and raises `ReviewIncomplete`: nothing more runs, no recommendation
@@ -42,6 +42,7 @@ from pr_review_agent.stages import ModelCall
 from pr_review_agent.stages.explore import explore
 from pr_review_agent.stages.fetch import fetch
 from pr_review_agent.stages.find import PASSES, find_problems
+from pr_review_agent.stages.publish import publish
 from pr_review_agent.stages.understand import understand
 from pr_review_agent.stages.verify import verify
 from pr_review_agent.version import __version__
@@ -202,9 +203,26 @@ def _run_stages(
         timings=tuple(stages.timings),
         dry_run=dry_run,
     )
-    # The result leaves the program (to the terminal, or to code using the package), so
-    # every text in it is masked, including anything the model quoted (FR-21).
-    return ReviewResult.model_validate(components.masker.mask_data(result.model_dump(mode="json")))
+    # The result leaves the program (to GitHub, the terminal, or code using the package),
+    # so every text in it is masked, including anything the model quoted (FR-21).
+    masked = ReviewResult.model_validate(
+        components.masker.mask_data(result.model_dump(mode="json"))
+    )
+    if dry_run:
+        return masked
+    with stages.run("publish", "Posting the review on GitHub"):
+        review_url, summary_url = publish(
+            components.github, pull_request, masked, components.masker, deadline
+        )
+        run_log.record("review posted", review_url=review_url, summary_url=summary_url)
+        log.info("Posted: %s", summary_url)
+    return masked.model_copy(
+        update={
+            "review_url": review_url,
+            "summary_url": summary_url,
+            "timings": tuple(stages.timings),
+        }
+    )
 
 
 def _record_calls(

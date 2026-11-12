@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from pr_review_agent.domain import Deadline, ReviewIncomplete, TimeLimitReached
-from pr_review_agent.retry import retry_after, send_with_retries
+from pr_review_agent.retry import is_temporary, retry_after, send_with_retries
 
 
 class Script:
@@ -30,14 +30,26 @@ def run(
     script: Script,
     *,
     seconds: float = 600,
-    temporary: Callable[[httpx.Response], bool] | None = None,
+    temporary: Callable[[httpx.Response], bool] = is_temporary,
+    retry_network_errors: bool = True,
 ) -> tuple[httpx.Response, list[float]]:
     waits: list[float] = []
-    extra = {"temporary": temporary} if temporary else {}
     response = send_with_retries(
-        script, service="GitHub", deadline=Deadline(seconds), sleep=waits.append, **extra
+        script,
+        service="GitHub",
+        deadline=Deadline(seconds),
+        sleep=waits.append,
+        temporary=temporary,
+        retry_network_errors=retry_network_errors,
     )
     return response, waits
+
+
+def test_a_write_isnt_sent_again_after_a_dropped_connection() -> None:
+    script = Script(httpx.ReadTimeout("no answer"), httpx.Response(200))
+    with pytest.raises(ReviewIncomplete, match="it may or may not have arrived"):
+        run(script, retry_network_errors=False)
+    assert script.calls == 1
 
 
 def test_a_lasting_answer_is_returned_at_once() -> None:
