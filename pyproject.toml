@@ -25,6 +25,7 @@ classifiers = [
 # Only packages our own code imports directly; uv.lock pins everything else.
 dependencies = [
     "pydantic>=2.14.3",  # data types and validation of model output
+    "pydantic-settings>=2.16.2",  # settings from PRRA_ environment variables and .env
 ]
 
 [project.urls]
@@ -60,8 +61,8 @@ extend-exclude = ["experiments"]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "S", "PT", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
-# Tests are allowed plain `assert`.
-"tests/**" = ["S101"]
+# Tests are allowed plain `assert`, and made-up tokens and passwords as sample data.
+"tests/**" = ["S101", "S105", "S106"]
 
 [tool.mypy]
 strict = true

@@ -4,6 +4,7 @@ Everything this module exports is the public API (design section 12.1); everythi
 the package is internal and can change in any release.
 """
 
+from pr_review_agent.config import Settings
 from pr_review_agent.domain import (
     CheckedFindings,
     Finding,
@@ -24,6 +25,7 @@ __all__ = [
     "ReviewIncomplete",
     "ReviewResult",
     "ReviewScope",
+    "Settings",
     "SetupError",
     "Understanding",
     "__version__",
