@@ -19,3 +19,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 - The review summary and finding comments in Markdown: the understanding, the recommendation and its reasons, the reviewed commit, files reviewed and skipped, findings and dropped findings, the model, prompts and time; every text is masked ([#11](https://github.com/Vijay021212/pr-review-agent/issues/11)).
 - The first complete review: `pr-review-agent review <link> --dry-run` and the `review_pull_request()` function run every stage in order, stop with "incomplete" if any stage fails or the time limit is reached, and exit with 0, 1 or 2 ([#12](https://github.com/Vijay021212/pr-review-agent/issues/12)).
 - A run log for every review: one JSON-lines file in `~/.pr-review-agent/runs/` with each stage, model call (prompt version, tokens, seconds, retries), finding and how the review ended, masked ([#13](https://github.com/Vijay021212/pr-review-agent/issues/13)).
+
+### Fixed
+
+- Reviews saved to a file on Windows are written as UTF-8; time limits under a minute are written in seconds; the "posting isn't available yet" message names `--dry-run` ([#44](https://github.com/Vijay021212/pr-review-agent/issues/44)).

@@ -82,7 +82,11 @@ def _show_progress() -> None:
 
 
 def _safe_output() -> None:
-    """Never crash on a character the terminal can't show (older Windows consoles)."""
+    """Always write UTF-8, and never crash on a character the terminal can't show.
+
+    On Windows, output saved to a file (`> review.md`) would otherwise use the console's
+    old character set, which breaks Markdown and loses characters outside that set.
+    """
     for stream in (sys.stdout, sys.stderr):
         if isinstance(stream, io.TextIOWrapper):
-            stream.reconfigure(errors="replace")
+            stream.reconfigure(encoding="utf-8", errors="replace")

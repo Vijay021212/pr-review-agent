@@ -511,8 +511,13 @@ class Deadline:
     def check(self, doing: str) -> None:
         """Raise `TimeLimitReached` if time is up; `doing` says what was about to happen."""
         if self.expired:
-            minutes = self.seconds / 60
-            raise TimeLimitReached(f"the {minutes:g}-minute time limit was reached before {doing}")
+            # "the 20-minute time limit", or "the 3-second time limit" for short limits.
+            limit = (
+                f"{self.seconds / 60:g}-minute"
+                if self.seconds >= 60
+                else f"{self.seconds:g}-second"
+            )
+            raise TimeLimitReached(f"the {limit} time limit was reached before {doing}")
 
 
 # --- Interfaces --------------------------------------------------------------------------
