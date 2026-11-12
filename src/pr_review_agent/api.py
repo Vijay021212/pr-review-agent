@@ -38,7 +38,7 @@ def review_pull_request(
     if not dry_run:
         raise SetupError(
             "Posting the review on GitHub isn't available in this version yet.",
-            "Use dry_run=True (on the command line, --dry-run) to see the review without "
+            "Add --dry-run to the command (in Python, dry_run=True) to see the review without "
             "posting it.",
         )
     components = factory.build(settings)

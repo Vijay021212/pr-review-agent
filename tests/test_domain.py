@@ -385,6 +385,18 @@ def test_deadline_raises_once_time_is_up() -> None:
         deadline.check("posting")
 
 
+@pytest.mark.parametrize(
+    ("seconds", "limit"),
+    [(3, "3-second"), (59.5, "59.5-second"), (60, "1-minute"), (90, "1.5-minute")],
+)
+def test_the_time_limit_message_uses_seconds_under_a_minute(seconds: float, limit: str) -> None:
+    clock = FakeClock()
+    deadline = Deadline(seconds, clock=clock)
+    clock.now += seconds + 1
+    with pytest.raises(TimeLimitReached, match=f"the {limit} time limit was reached"):
+        deadline.check("posting")
+
+
 @pytest.mark.parametrize("seconds", [0, -5])
 def test_deadline_needs_a_positive_limit(seconds: float) -> None:
     with pytest.raises(ValueError, match="positive"):

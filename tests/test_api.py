@@ -72,8 +72,9 @@ def test_a_bad_link_is_a_setup_error(built: list[Settings]) -> None:
 
 
 def test_posting_isnt_available_yet(built: list[Settings]) -> None:
-    with pytest.raises(SetupError, match="Posting the review on GitHub isn't available"):
+    with pytest.raises(SetupError, match="Posting the review on GitHub isn't available") as caught:
         review_pull_request(LINK)
+    assert caught.value.fix.startswith("Add --dry-run to the command (in Python, dry_run=True)")
     assert built == []
 
 

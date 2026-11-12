@@ -121,6 +121,21 @@ def test_output_streams_of_any_kind_work(
     assert "## Review by pr-review-agent" in out.getvalue()
 
 
+def test_output_saved_to_a_file_is_utf_8(
+    calls: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On Windows, a redirected output starts in the console's old character set (cp1252
+    here); the review must still be written as UTF-8 with every character intact."""
+    saved = io.BytesIO()
+    stdout = io.TextIOWrapper(saved, encoding="cp1252")
+    monkeypatch.setattr(sys, "stdout", stdout)
+    monkeypatch.setattr(sys, "stderr", io.TextIOWrapper(io.BytesIO(), encoding="cp1252"))
+    assert cli.main(["review", LINK, "--dry-run"]) == 0
+    stdout.flush()
+    text = saved.getvalue().decode("utf-8")
+    assert "qwen2.5-coder:7b` (ollama) · prompts" in text
+
+
 def test_python_dash_m_runs_the_same_command(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
