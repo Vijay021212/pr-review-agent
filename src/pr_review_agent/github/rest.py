@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -21,6 +22,7 @@ from pr_review_agent.domain import (
     SetupError,
 )
 from pr_review_agent.github.diff import parse_patch
+from pr_review_agent.github.snapshot import MAX_SNAPSHOT_BYTES, unpack, write_limited
 from pr_review_agent.retry import is_temporary, retry_after, send_with_retries
 from pr_review_agent.version import __version__
 
@@ -111,6 +113,31 @@ class GitHubRest:
             languages=tuple(sorted(languages, key=lambda name: -languages[name])),
         )
 
+    def download_snapshot(
+        self, pull_request: PullRequest, folder: Path, deadline: Deadline
+    ) -> Path:
+        """Download and unpack the repository at the reviewed commit; return its root.
+
+        The tarball comes from the head repository, which is the fork for a pull request
+        from a fork (FR-20), at the exact head commit (FR-19).
+        """
+        path = (
+            f"/repos/{pull_request.head_owner}/{pull_request.head_repo}"
+            f"/tarball/{pull_request.head_sha}"
+        )
+        archive = folder / "snapshot.tar.gz"
+        try:
+            response = self._send(path, deadline, stream=True)
+            try:
+                if response.is_error:
+                    self._check(response, "the repository snapshot")
+                write_limited(response.iter_bytes(), archive, MAX_SNAPSHOT_BYTES)
+            finally:
+                response.close()
+            return unpack(archive, folder / "repository")
+        finally:
+            archive.unlink(missing_ok=True)  # only the unpacked files are kept
+
     def _changed_files(self, ref: PullRequestRef, deadline: Deadline) -> tuple[ChangedFile, ...]:
         files: list[ChangedFile] = []
         path = f"/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}/files"
@@ -148,15 +175,27 @@ class GitHubRest:
         return self._check(self._send(path, deadline, params=params), what)
 
     def _send(
-        self, path: str, deadline: Deadline, *, params: dict[str, int] | None = None
+        self,
+        path: str,
+        deadline: Deadline,
+        *,
+        params: dict[str, int] | None = None,
+        stream: bool = False,
     ) -> httpx.Response:
         def send() -> httpx.Response:
-            return self._client.get(
+            request = self._client.build_request(
+                "GET",
                 self._base_url + path,
                 params=params,
                 headers=self._headers,
                 timeout=min(REQUEST_SECONDS, max(deadline.remaining(), 1.0)),
             )
+            # Redirects are followed: GitHub sends downloads to another host, and httpx
+            # drops the token when it leaves api.github.com.
+            response = self._client.send(request, stream=stream, follow_redirects=True)
+            if stream and response.is_error:
+                response.read()  # error bodies are small; reading them lets the checks see them
+            return response
 
         return send_with_retries(
             send,

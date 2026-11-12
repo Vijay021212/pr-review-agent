@@ -17,6 +17,7 @@ import re
 import time
 from collections.abc import Callable
 from enum import IntEnum, StrEnum
+from pathlib import Path
 from typing import Annotated, Any, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -557,4 +558,10 @@ class GitHub(Protocol):
 
     def get_pull_request(self, ref: PullRequestRef, deadline: Deadline) -> PullRequest:
         """The pull request's details and changed files, fixed at its current head commit."""
+        ...
+
+    def download_snapshot(
+        self, pull_request: PullRequest, folder: Path, deadline: Deadline
+    ) -> Path:
+        """Unpack the repository at the reviewed commit into `folder`; return its root."""
         ...

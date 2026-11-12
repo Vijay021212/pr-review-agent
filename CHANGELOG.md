@@ -4,6 +4,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+### Added
+
+- The repository snapshot: the reviewed commit's files, downloaded from the fork for fork pull requests and unpacked safely into a temporary read-only folder that's removed after the review ([#14](https://github.com/Vijay021212/pr-review-agent/issues/14)).
+
 ## [0.1.0] - 2026-11-12
 
 The first review in the terminal: `pr-review-agent review <link> --dry-run` prints a complete review with a recommendation. Posting on GitHub comes in 0.2.0.
