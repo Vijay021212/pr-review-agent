@@ -23,7 +23,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 # Only packages our own code imports directly; uv.lock pins everything else.
-dependencies = []
+dependencies = [
+    "pydantic>=2.14.3",  # data types and validation of model output
+]
 
 [project.urls]
 Repository = "https://github.com/Vijay021212/pr-review-agent"
@@ -64,6 +66,8 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "S", "PT", "RUF"]
 [tool.mypy]
 strict = true
 files = ["src", "tests"]
+# Teaches mypy how Pydantic models are built, so their arguments are type-checked too.
+plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
