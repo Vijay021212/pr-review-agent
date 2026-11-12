@@ -82,3 +82,22 @@ def explore_step(action: str, **fields: Any) -> str:
 
 EXPLORE_DONE = explore_step("done", reason="The diff shows everything the review needs.")
 """The explore stage's answer when the model needs to read nothing more."""
+
+
+def double_check(*keep: bool, severity: str = "high", status: str = "confirmed") -> str:
+    """The double-check's answer: one decision per finding, in order."""
+    decisions = [
+        {
+            "number": number,
+            "keep": kept,
+            "reason": "The code shown supports it." if kept else "The code shown contradicts it.",
+            "severity": severity,
+            "status": status,
+        }
+        for number, kept in enumerate(keep, start=1)
+    ]
+    return json.dumps({"decisions": decisions})
+
+
+KEEP_ONE = double_check(True)
+"""The double-check keeping a single High, confirmed finding as it is."""

@@ -24,7 +24,7 @@ from pr_review_agent.pipeline import run_review
 from pr_review_agent.runlog import RunLog
 from pr_review_agent.secrets import Masker
 from tests.builders import make_file, make_finding, make_pull_request
-from tests.fakes import EXPLORE_DONE, FakeChatModel, FakeGitHub
+from tests.fakes import EXPLORE_DONE, KEEP_ONE, FakeChatModel, FakeGitHub
 
 UNDERSTANDING = json.dumps(
     {
@@ -70,6 +70,7 @@ def test_the_stages_run_in_order_and_are_timed() -> None:
         "snapshot",
         "explore",
         "find",
+        "double-check",
         "recommend",
     ]
     assert all(timing.seconds >= 0 for timing in result.timings)
@@ -89,7 +90,7 @@ def test_a_clean_review_approves() -> None:
 
 def test_a_confirmed_high_finding_requests_changes() -> None:
     result = review(
-        components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, findings(), NO_FINDINGS]))
+        components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, findings(), NO_FINDINGS, KEEP_ONE]))
     )
     assert result.recommendation.value is RecommendationValue.REQUEST_CHANGES
     assert [(f.file, f.line) for f in result.findings.kept] == [("src/app.py", 1)]
@@ -119,7 +120,13 @@ def test_findings_outside_their_batch_are_reported_as_dropped() -> None:
 def test_every_text_in_the_result_is_masked() -> None:
     key = "AKIA" + "IOSFODNN7EXAMPLE"
     model = FakeChatModel(
-        [UNDERSTANDING, EXPLORE_DONE, findings(explanation=f"Hard-coded key {key}."), NO_FINDINGS]
+        [
+            UNDERSTANDING,
+            EXPLORE_DONE,
+            findings(explanation=f"Hard-coded key {key}."),
+            NO_FINDINGS,
+            KEEP_ONE,
+        ]
     )
     pull_request = make_pull_request(title="Uses my-own-github-token-0001")
     result = review(components(model, pull_request, masker=Masker(["my-own-github-token-0001"])))

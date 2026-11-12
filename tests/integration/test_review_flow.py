@@ -19,7 +19,7 @@ from pr_review_agent.domain import FileStatus, RecommendationValue
 from pr_review_agent.factory import Components
 from pr_review_agent.secrets import Masker
 from tests.builders import make_file, make_pull_request
-from tests.fakes import EXPLORE_DONE, FakeChatModel, FakeGitHub, explore_step
+from tests.fakes import EXPLORE_DONE, KEEP_ONE, FakeChatModel, FakeGitHub, explore_step
 
 LINK = "https://github.com/octo/shop/pull/7"
 
@@ -87,7 +87,7 @@ class World:
 
 
 def test_a_pull_request_with_a_bug_gets_request_changes(monkeypatch: pytest.MonkeyPatch) -> None:
-    world = World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found())
+    world = World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found(), KEEP_ONE)
     result = review_pull_request(LINK, dry_run=True)
 
     assert result.understanding.goal.startswith("Add a members' discount")
@@ -96,7 +96,8 @@ def test_a_pull_request_with_a_bug_gets_request_changes(monkeypatch: pytest.Monk
     assert result.recommendation.value is RecommendationValue.REQUEST_CHANGES
     assert result.recommendation.reasons == ("1 High finding (`src/cart.py` line 3)",)
     # Each stage asked the model once, in order, and saw what it needed.
-    understand_call, explore_call, find_call, find_b_call = world.model.calls
+    understand_call, explore_call, find_call, find_b_call, verify_call = world.model.calls
+    assert "## Finding 1" in verify_call.user
     assert "<<<BEGIN TITLE>>>\nAdd a discount" in understand_call.user
     assert "This is step 1 of at most 10." in explore_call.user
     assert "Goal: Add a members' discount" in find_call.user
@@ -149,7 +150,7 @@ def test_a_model_that_fails_makes_the_review_incomplete(monkeypatch: pytest.Monk
 def test_the_command_line_prints_the_whole_review(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found())
+    World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found(), KEEP_ONE)
     assert cli.main(["review", LINK, "--dry-run"]) == 0
     captured = capsys.readouterr()
     out = captured.out
@@ -197,13 +198,15 @@ def test_exploring_finds_the_caller_and_the_finding_names_it(
         ),
         explore_step("done", reason="The caller is understood."),
     ]
-    world = World(monkeypatch, understanding(), *steps, found(BUG), found(), repository=repository)
+    world = World(
+        monkeypatch, understanding(), *steps, found(BUG), found(), KEEP_ONE, repository=repository
+    )
     assert cli.main(["review", LINK, "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "- **Related files opened:** `src/checkout.py`" in out
     assert '- **Searches:** "total("' in out
     assert "- **Exploring stopped because** the model had seen enough." in out
-    find_call = world.model.calls[-1]
+    find_call = world.model.calls[-2]
     assert (
         "- src/checkout.py:4 calls total() with every cart, empty ones included." in find_call.user
     )

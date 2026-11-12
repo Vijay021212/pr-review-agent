@@ -18,7 +18,7 @@ from pr_review_agent.pipeline import run_review
 from pr_review_agent.runlog import RunLog
 from pr_review_agent.secrets import Masker
 from tests.builders import make_file, make_finding, make_pull_request
-from tests.fakes import EXPLORE_DONE, FakeChatModel, FakeGitHub
+from tests.fakes import EXPLORE_DONE, KEEP_ONE, FakeChatModel, FakeGitHub
 
 REF = PullRequestRef(owner="octo", repo="shop", number=7)
 MOMENT = datetime(2026, 11, 11, 14, 25, 30, 123000, tzinfo=UTC)
@@ -91,6 +91,7 @@ def test_a_complete_review_records_every_step_in_order(tmp_path: Path) -> None:
         EXPLORE_DONE,
         findings(finding(), finding(file="elsewhere.py")),
         findings(),
+        KEEP_ONE,
         files=(make_file("src/app.py"), make_file("uv.lock")),
     )
     events = run_log.events()
@@ -114,6 +115,9 @@ def test_a_complete_review_records_every_step_in_order(tmp_path: Path) -> None:
         "stage finished",
         "stage started",
         "model call",
+        "model call",
+        "stage finished",
+        "stage started",
         "model call",
         "stage finished",
         "finding kept",
