@@ -34,6 +34,7 @@ from pr_review_agent.stages import ModelCall, ask
 FINDINGS_PER_CALL = 4
 CODE_LINES_AROUND = 15  # lines of the reviewed code shown before and after a finding's line
 DIFF_LINES_AROUND = 12  # lines of the diff shown around it
+SERIOUS = (Severity.CRITICAL, Severity.HIGH)
 
 
 class Decision(BaseModel):
@@ -81,6 +82,8 @@ def verify(
                 kept.append(finding)  # no answer for it: kept as found, never silently lost
             elif decision.keep:
                 kept.append(_corrected(finding, decision))
+            elif finding.severity in SERIOUS:
+                kept.append(_disputed(finding, decision))
             else:
                 reason = f"the double-check found it doesn't hold: {decision.reason}"
                 dropped.append(DroppedFinding(finding=finding, reason=reason))
@@ -153,6 +156,22 @@ def _diff_around(file: ChangedFile, finding: Finding) -> str:
         if near(line.new_number if finding.side is Side.NEW else line.old_number)
     )
     return render_file(file.model_copy(update={"lines": lines}))
+
+
+def _disputed(finding: Finding, decision: Decision) -> Finding:
+    """A serious finding the double-check rejects is kept as a potential risk, not dropped.
+
+    One small-model answer disagreeing with another isn't proof either way, and dropping a
+    real Critical or High problem is the worst mistake a reviewer can make. As a potential
+    risk it asks a person to decide (rule 2(d) of requirements 5.3) with both views shown.
+    """
+    note = f" (The double-check disputed this finding: {decision.reason} A person should decide.)"
+    return finding.model_copy(
+        update={
+            "status": FindingStatus.POTENTIAL_RISK,
+            "severity_reason": finding.severity_reason + note,
+        }
+    )
 
 
 def _corrected(finding: Finding, decision: Decision) -> Finding:

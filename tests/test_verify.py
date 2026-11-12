@@ -59,15 +59,33 @@ def test_a_finding_the_model_confirms_is_kept(root: Path) -> None:
     assert [call.prompt for call in calls] == ["verify v1"]
 
 
-def test_a_finding_the_model_rejects_is_dropped_with_its_reason(root: Path) -> None:
-    checked, _ = check(
-        FakeChatModel([double_check(False)]), root, make_finding(file="src/cart.py", line=20)
-    )
+@pytest.mark.parametrize("severity", [Severity.MEDIUM, Severity.LOW])
+def test_a_finding_the_model_rejects_is_dropped_with_its_reason(
+    root: Path, severity: Severity
+) -> None:
+    finding = make_finding(file="src/cart.py", line=20, severity=severity)
+    checked, _ = check(FakeChatModel([double_check(False)]), root, finding)
     assert checked.kept == ()
     (dropped,) = checked.dropped
     assert dropped.reason == (
         "the double-check found it doesn't hold: The code shown contradicts it."
     )
+
+
+@pytest.mark.parametrize("severity", [Severity.CRITICAL, Severity.HIGH])
+def test_a_serious_finding_the_model_disputes_becomes_a_potential_risk(
+    root: Path, severity: Severity
+) -> None:
+    """A real Critical or High problem must never be lost to one wrong answer."""
+    finding = make_finding(file="src/cart.py", line=20, severity=severity)
+    checked, _ = check(FakeChatModel([double_check(False)]), root, finding)
+    (kept,) = checked.kept
+    assert (kept.severity, kept.status) == (severity, FindingStatus.POTENTIAL_RISK)
+    assert kept.severity_reason.endswith(
+        "(The double-check disputed this finding: The code shown contradicts it. "
+        "A person should decide.)"
+    )
+    assert checked.dropped == ()
 
 
 def test_a_corrected_severity_and_status_are_noted(root: Path) -> None:
@@ -82,9 +100,10 @@ def test_a_corrected_severity_and_status_are_noted(root: Path) -> None:
 
 def test_a_finding_without_a_decision_is_kept_as_found(root: Path) -> None:
     first, second = (
-        make_finding(file="src/cart.py", line=10),
-        make_finding(file="src/cart.py", line=30),
+        make_finding(file="src/cart.py", line=10, severity=Severity.MEDIUM),
+        make_finding(file="src/cart.py", line=30, severity=Severity.MEDIUM),
     )
+    # The answer decides only the first finding (and drops it); the second gets none.
     checked, _ = check(FakeChatModel([double_check(False)]), root, first, second)
     assert checked.kept == (second,)
 
