@@ -43,9 +43,9 @@ dev = [
     "ruff>=0.17.4",       # linter and formatter
 ]
 
-# The version lives in one place: __version__ in the package.
+# The version lives in one place: src/pr_review_agent/version.py.
 [tool.hatch.version]
-path = "src/pr_review_agent/__init__.py"
+path = "src/pr_review_agent/version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pr_review_agent"]
@@ -63,7 +63,7 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "S", "PT", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests are allowed plain `assert`, and made-up tokens and passwords as sample data.
-"tests/**" = ["S101", "S105", "S106"]
+"tests/**" = ["S101", "S105", "S106", "S107"]
 
 [tool.mypy]
 strict = true
