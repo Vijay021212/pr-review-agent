@@ -90,6 +90,7 @@ def test_a_complete_review_records_every_step_in_order(tmp_path: Path) -> None:
         UNDERSTANDING,
         EXPLORE_DONE,
         findings(finding(), finding(file="elsewhere.py")),
+        findings(),
         files=(make_file("src/app.py"), make_file("uv.lock")),
     )
     events = run_log.events()
@@ -112,6 +113,7 @@ def test_a_complete_review_records_every_step_in_order(tmp_path: Path) -> None:
         "exploring stopped",
         "stage finished",
         "stage started",
+        "model call",
         "model call",
         "stage finished",
         "finding kept",
@@ -192,7 +194,7 @@ def test_the_public_function_writes_a_log_and_names_it(
     def build(settings: Settings) -> Components:
         return Components(
             FakeGitHub.serving(make_pull_request()),
-            FakeChatModel([UNDERSTANDING, EXPLORE_DONE, findings()]),
+            FakeChatModel([UNDERSTANDING, EXPLORE_DONE, findings(), findings()]),
             Masker(),
         )
 

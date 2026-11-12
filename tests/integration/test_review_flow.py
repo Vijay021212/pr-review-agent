@@ -87,7 +87,7 @@ class World:
 
 
 def test_a_pull_request_with_a_bug_gets_request_changes(monkeypatch: pytest.MonkeyPatch) -> None:
-    world = World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG))
+    world = World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found())
     result = review_pull_request(LINK, dry_run=True)
 
     assert result.understanding.goal.startswith("Add a members' discount")
@@ -96,16 +96,18 @@ def test_a_pull_request_with_a_bug_gets_request_changes(monkeypatch: pytest.Monk
     assert result.recommendation.value is RecommendationValue.REQUEST_CHANGES
     assert result.recommendation.reasons == ("1 High finding (`src/cart.py` line 3)",)
     # Each stage asked the model once, in order, and saw what it needed.
-    understand_call, explore_call, find_call = world.model.calls
+    understand_call, explore_call, find_call, find_b_call = world.model.calls
     assert "<<<BEGIN TITLE>>>\nAdd a discount" in understand_call.user
     assert "This is step 1 of at most 10." in explore_call.user
     assert "Goal: Add a members' discount" in find_call.user
     assert "     3 +     avg = price / len(items)" in find_call.user
+    assert "security and performance problems" in find_b_call.system
+    assert find_b_call.user == find_call.user  # both passes review the same batch the same way
     assert world.github.reads[0].number == 7
 
 
 def test_a_clean_pull_request_is_approved(monkeypatch: pytest.MonkeyPatch) -> None:
-    World(monkeypatch, understanding(), EXPLORE_DONE, found())
+    World(monkeypatch, understanding(), EXPLORE_DONE, found(), found())
     result = review_pull_request(LINK, dry_run=True)
     assert result.recommendation.value is RecommendationValue.APPROVE
     assert result.findings.kept == ()
@@ -114,7 +116,7 @@ def test_a_clean_pull_request_is_approved(monkeypatch: pytest.MonkeyPatch) -> No
 def test_a_lock_file_is_skipped_and_a_huge_file_is_a_gap(monkeypatch: pytest.MonkeyPatch) -> None:
     huge = make_file("src/generated_tables.py", [f"ROW_{n} = {n}" for n in range(4000)])
     files = (CART, make_file("uv.lock"), huge)
-    World(monkeypatch, understanding(), EXPLORE_DONE, found(), files=files)
+    World(monkeypatch, understanding(), EXPLORE_DONE, found(), found(), files=files)
     result = review_pull_request(LINK, dry_run=True)
     assert [(s.path, s.reason) for s in result.scope.skipped] == [
         ("uv.lock", "lock file"),
@@ -125,7 +127,14 @@ def test_a_lock_file_is_skipped_and_a_huge_file_is_a_gap(monkeypatch: pytest.Mon
 
 
 def test_an_unclear_goal_needs_a_person(monkeypatch: pytest.MonkeyPatch) -> None:
-    World(monkeypatch, understanding(goal_unclear=True), EXPLORE_DONE, found(), description="")
+    World(
+        monkeypatch,
+        understanding(goal_unclear=True),
+        EXPLORE_DONE,
+        found(),
+        found(),
+        description="",
+    )
     result = review_pull_request(LINK, dry_run=True)
     assert result.understanding.goal_source == "code"
     assert result.recommendation.value is RecommendationValue.NEEDS_HUMAN_REVIEW
@@ -140,7 +149,7 @@ def test_a_model_that_fails_makes_the_review_incomplete(monkeypatch: pytest.Monk
 def test_the_command_line_prints_the_whole_review(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG))
+    World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found())
     assert cli.main(["review", LINK, "--dry-run"]) == 0
     captured = capsys.readouterr()
     out = captured.out
@@ -150,7 +159,7 @@ def test_the_command_line_prints_the_whole_review(
     assert "#### `src/cart.py` line 3" in out
     assert "- **What happens now:** ZeroDivisionError, and the checkout page fails." in out
     assert "- **Reviewed (1 file):** `src/cart.py`" in out
-    assert "prompts: understand v1, explore v2, find_a v1" in out
+    assert "prompts: understand v1, explore v2, find_a v1, find_b v1" in out
     # Progress went to the error stream, so the review itself can be saved cleanly.
     assert "Reading pull request octo/shop#7..." in captured.err
 
@@ -188,7 +197,7 @@ def test_exploring_finds_the_caller_and_the_finding_names_it(
         ),
         explore_step("done", reason="The caller is understood."),
     ]
-    world = World(monkeypatch, understanding(), *steps, found(BUG), repository=repository)
+    world = World(monkeypatch, understanding(), *steps, found(BUG), found(), repository=repository)
     assert cli.main(["review", LINK, "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "- **Related files opened:** `src/checkout.py`" in out

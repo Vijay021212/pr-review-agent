@@ -1,6 +1,6 @@
 """Runs the review stages in a fixed order (design section 2, ADR-002).
 
-    fetch -> select files -> understand -> snapshot -> explore -> find problems -> recommend
+    fetch -> select files -> understand -> snapshot -> explore -> find (passes A, B) -> recommend
 
 **Failure rule (NFR-4):** if any stage fails, or the hard time limit is reached, the
 pipeline stops at once and raises `ReviewIncomplete`: nothing more runs, no recommendation
@@ -22,6 +22,7 @@ from pr_review_agent.config import Settings
 from pr_review_agent.domain import (
     CheckedFindings,
     Deadline,
+    DroppedFinding,
     ExploredContext,
     Finding,
     PullRequestRef,
@@ -39,7 +40,7 @@ from pr_review_agent.sensitive import find_sensitive
 from pr_review_agent.stages import ModelCall
 from pr_review_agent.stages.explore import explore
 from pr_review_agent.stages.fetch import fetch
-from pr_review_agent.stages.find import PASS_A, find_problems
+from pr_review_agent.stages.find import PASSES, find_problems
 from pr_review_agent.stages.understand import understand
 from pr_review_agent.version import __version__
 
@@ -161,13 +162,19 @@ def _run_stages(
             _record_calls(run_log, "explore", explore_calls)
             _record_exploring(run_log, explored)
             calls += explore_calls
+        kept: list[Finding] = []
+        dropped: list[DroppedFinding] = []
         with stages.run("find", f"Looking for problems in {len(scope.batches)} batch(es) of files"):
-            found = find_problems(
-                PASS_A, pull_request, scope, understanding, explored, model, deadline
-            )
-            _record_calls(run_log, "find", found.calls)
-            calls += found.calls
-        findings = CheckedFindings(kept=found.findings, dropped=found.dropped)
+            for finding_pass in PASSES:
+                log.info("Pass: %s...", finding_pass.focus)
+                found = find_problems(
+                    finding_pass, pull_request, scope, understanding, explored, model, deadline
+                )
+                _record_calls(run_log, "find", found.calls)
+                calls += found.calls
+                kept += found.findings
+                dropped += found.dropped
+        findings = CheckedFindings(kept=tuple(kept), dropped=tuple(dropped))
         _record_findings(run_log, findings)
         with stages.run("recommend", "Applying the recommendation rules"):
             changed_paths = [file.path for file in pull_request.files]

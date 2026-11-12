@@ -70,6 +70,13 @@ PASS_A = FindPass(
     focus="correctness and regressions (levels 1-3)",
     answer_type=BugFindingsAnswer,
 )
+PASS_B = FindPass(
+    prompt="find_b",
+    focus="security and performance (levels 4-5)",
+    answer_type=BugFindingsAnswer,
+)
+PASSES = (PASS_A, PASS_B)
+"""The passes the pipeline runs, in order (design section 2)."""
 
 
 @dataclass(frozen=True)

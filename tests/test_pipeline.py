@@ -60,7 +60,9 @@ def review(
 
 
 def test_the_stages_run_in_order_and_are_timed() -> None:
-    result = review(components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS])))
+    result = review(
+        components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS, NO_FINDINGS]))
+    )
     assert [timing.stage for timing in result.timings] == [
         "fetch",
         "select files",
@@ -71,20 +73,24 @@ def test_the_stages_run_in_order_and_are_timed() -> None:
         "recommend",
     ]
     assert all(timing.seconds >= 0 for timing in result.timings)
-    assert result.prompt_versions == ("understand v1", "explore v2", "find_a v1")
+    assert result.prompt_versions == ("understand v1", "explore v2", "find_a v1", "find_b v1")
     assert (result.provider, result.model) == ("fake", "fake-model")
     assert result.dry_run
 
 
 def test_a_clean_review_approves() -> None:
-    result = review(components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS])))
+    result = review(
+        components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS, NO_FINDINGS]))
+    )
     assert result.recommendation.value is RecommendationValue.APPROVE
     assert result.findings.kept == ()
     assert result.explored.stopped_by is ExploreStop.DONE
 
 
 def test_a_confirmed_high_finding_requests_changes() -> None:
-    result = review(components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, findings()])))
+    result = review(
+        components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, findings(), NO_FINDINGS]))
+    )
     assert result.recommendation.value is RecommendationValue.REQUEST_CHANGES
     assert [(f.file, f.line) for f in result.findings.kept] == [("src/app.py", 1)]
 
@@ -92,7 +98,9 @@ def test_a_confirmed_high_finding_requests_changes() -> None:
 def test_a_sensitive_path_needs_a_person() -> None:
     pull_request = make_pull_request(files=(make_file("src/auth/login.py"),))
     result = review(
-        components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS]), pull_request)
+        components(
+            FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS, NO_FINDINGS]), pull_request
+        )
     )
     assert result.recommendation.value is RecommendationValue.NEEDS_HUMAN_REVIEW
     assert "sensitive area: authentication" in result.recommendation.reasons[0]
@@ -100,7 +108,9 @@ def test_a_sensitive_path_needs_a_person() -> None:
 
 def test_findings_outside_their_batch_are_reported_as_dropped() -> None:
     result = review(
-        components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, findings(file="elsewhere.py")]))
+        components(
+            FakeChatModel([UNDERSTANDING, EXPLORE_DONE, findings(file="elsewhere.py"), NO_FINDINGS])
+        )
     )
     assert result.findings.kept == ()
     assert result.findings.dropped[0].finding.file == "elsewhere.py"
@@ -109,7 +119,7 @@ def test_findings_outside_their_batch_are_reported_as_dropped() -> None:
 def test_every_text_in_the_result_is_masked() -> None:
     key = "AKIA" + "IOSFODNN7EXAMPLE"
     model = FakeChatModel(
-        [UNDERSTANDING, EXPLORE_DONE, findings(explanation=f"Hard-coded key {key}.")]
+        [UNDERSTANDING, EXPLORE_DONE, findings(explanation=f"Hard-coded key {key}."), NO_FINDINGS]
     )
     pull_request = make_pull_request(title="Uses my-own-github-token-0001")
     result = review(components(model, pull_request, masker=Masker(["my-own-github-token-0001"])))
@@ -143,11 +153,14 @@ def test_the_time_limit_stops_the_review() -> None:
     clock = iter([0.0] + [1000.0] * 20)
     deadline = Deadline(60, clock=lambda: next(clock))
     with pytest.raises(TimeLimitReached):
-        review(components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS])), deadline)
+        review(
+            components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS, NO_FINDINGS])),
+            deadline,
+        )
 
 
 def test_progress_is_logged(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.INFO, logger="pr_review_agent"):
-        review(components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS])))
+        review(components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS, NO_FINDINGS])))
     assert caplog.messages[0] == "Reading pull request octo/shop#7..."
     assert "Looking for problems in 1 batch(es) of files..." in caplog.messages
