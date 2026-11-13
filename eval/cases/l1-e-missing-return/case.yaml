@@ -1,0 +1,13 @@
+title: Apply percentage discounts at checkout
+description: Checkout totals now take the shopper's discount into account.
+kind: planted
+recommendation: Request Changes
+held_out: true
+problems:
+- file: checkout.py
+  marker: discounted = total * (1 - percent / 100)
+  lines: 1
+  level: 1
+  category: bug
+  what: apply_discount() computes the discounted total but never returns it, so it returns None and checkout_total()
+    raises TypeError.

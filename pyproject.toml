@@ -59,7 +59,9 @@ packages = ["src/pr_review_agent"]
 line-length = 100
 target-version = "py312"
 # Finished experiments are kept as a record of past decisions, not maintained as product code.
-extend-exclude = ["experiments"]
+# The evaluation cases are test data: they contain planted bugs on purpose, and a fix would
+# change what the evaluation measures.
+extend-exclude = ["experiments", "eval/cases"]
 
 [tool.ruff.lint]
 # E/W/F: errors and bugs, I: import order, UP: modern syntax, B: likely bugs,

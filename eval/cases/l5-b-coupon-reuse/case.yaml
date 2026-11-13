@@ -1,0 +1,12 @@
+title: Redeem single-use coupons at checkout
+description: Shoppers can enter a single-use coupon code at checkout to lower their total.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: coupons.py
+  marker: return max(total - COUPONS[code].amount, 0.0)
+  lines: 1
+  level: 5
+  category: security
+  what: redeem() never sets coupon.used, so a single-use coupon can be redeemed again on every order.

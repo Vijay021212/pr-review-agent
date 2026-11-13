@@ -1,0 +1,14 @@
+title: Show the customer's latest order
+description: The dashboard now shows the customer's most recent order. Orders come from the database sorted
+  by date, oldest first.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: dashboard.py
+  marker: return orders[0]
+  lines: 1
+  level: 1
+  category: bug
+  what: Orders are sorted oldest first, so orders[0] is the oldest order, not the latest; it should be
+    orders[-1].

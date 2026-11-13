@@ -1,0 +1,5 @@
+title: Add a clamp() helper
+description: Adds clamp() to keep a value inside a range, with tests.
+kind: clean
+recommendation: Approve
+held_out: false
