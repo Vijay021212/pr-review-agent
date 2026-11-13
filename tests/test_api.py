@@ -80,7 +80,6 @@ def test_posting_needs_a_token(built: list[Settings]) -> None:
         review_pull_request(LINK)
     assert "PRRA_GITHUB_TOKEN" in caught.value.fix
     assert "--dry-run" in caught.value.fix
-    assert built == []
 
 
 def test_the_public_api_is_what_design_12_1_lists() -> None:

@@ -42,7 +42,7 @@ from pr_review_agent.domain import (
     Understanding,
 )
 from tests.builders import SHA, make_file, make_finding, make_pull_request
-from tests.fakes import FakeGitHub
+from tests.fakes import FakeChatModel, FakeGitHub
 
 
 class FakeClock:
@@ -406,21 +406,9 @@ def test_deadline_needs_a_positive_limit(seconds: float) -> None:
 # --- Interfaces --------------------------------------------------------------------------
 
 
-class ScriptedModel:
-    """The smallest class that satisfies ChatModel; mypy checks the match below."""
-
-    provider = "fake"
-    model = "scripted"
-
-    def complete_json(
-        self, system: str, user: str, schema: dict[str, Any], deadline: Deadline
-    ) -> ModelReply:
-        return ModelReply(text='{"ok": true}', model=self.model)
-
-
 def test_any_class_with_the_right_methods_fits_the_interfaces(tmp_path: Path) -> None:
     """mypy checks the assignments: a class needs only the right methods, no base class."""
-    model: ChatModel = ScriptedModel()
+    model: ChatModel = FakeChatModel(['{"ok": true}'])
     github: GitHub = FakeGitHub.serving(make_pull_request(owner="a", repo="b", number=3))
     deadline = Deadline(10)
     assert model.complete_json("system", "user", {}, deadline).text == '{"ok": true}'

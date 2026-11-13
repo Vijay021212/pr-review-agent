@@ -64,6 +64,7 @@ def test_the_stages_run_in_order_and_are_timed() -> None:
         components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS, NO_FINDINGS]))
     )
     assert [timing.stage for timing in result.timings] == [
+        "preflight",
         "fetch",
         "select files",
         "understand",
@@ -169,5 +170,5 @@ def test_the_time_limit_stops_the_review() -> None:
 def test_progress_is_logged(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.INFO, logger="pr_review_agent"):
         review(components(FakeChatModel([UNDERSTANDING, EXPLORE_DONE, NO_FINDINGS, NO_FINDINGS])))
-    assert caplog.messages[0] == "Reading pull request octo/shop#7..."
+    assert caplog.messages[:2] == ["Checking the setup...", "Reading pull request octo/shop#7..."]
     assert "Looking for problems in 1 batch(es) of files..." in caplog.messages

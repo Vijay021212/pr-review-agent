@@ -140,6 +140,26 @@ class GitHubRest:
         finally:
             archive.unlink(missing_ok=True)  # only the unpacked files are kept
 
+    def check_access(self, ref: PullRequestRef, *, write: bool, deadline: Deadline) -> None:
+        """The token can read the repository and, when posting, may write to it.
+
+        A classic token lists its scopes in a response header, so a missing write scope is
+        caught here. A fine-grained token doesn't reveal its permissions in advance; a
+        missing "Pull requests: write" then shows only when posting, with its own message.
+        """
+        response = self._send(f"/repos/{ref.owner}/{ref.repo}", deadline)
+        self._check(response, f"the repository {ref.owner}/{ref.repo}")
+        scopes_header = response.headers.get("x-oauth-scopes")
+        if write and scopes_header is not None:
+            scopes = {scope.strip() for scope in scopes_header.split(",") if scope.strip()}
+            if not scopes & {"repo", "public_repo"}:
+                raise SetupError(
+                    "The GitHub token can't post reviews: it has "
+                    f"{', '.join(sorted(scopes)) or 'no'} scopes.",
+                    "Give the classic token the repo (or public_repo) scope, or use a "
+                    "fine-grained token with Contents: read and Pull requests: write.",
+                )
+
     def head_sha(self, ref: PullRequestRef, deadline: Deadline) -> str:
         path = f"/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}"
         sha: str = self._get(path, deadline, f"pull request {ref}")["head"]["sha"]

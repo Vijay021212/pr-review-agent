@@ -12,6 +12,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 - Find pass B: security and performance problems at review levels 4 and 5, reported only with concrete evidence from the code, run on every batch after pass A ([#17](https://github.com/Vijay021212/pr-review-agent/issues/17)).
 - The double-check stage: every finding is moved onto a changed line or dropped, re-checked by the model against the code at the reviewed commit, and kept once when reported twice; weak findings and Low-severity style suggestions are dropped with their reason ([#18](https://github.com/Vijay021212/pr-review-agent/issues/18)).
 - Posting the review on GitHub: without `--dry-run`, every finding is posted in one plain comment review on its line, never an approval or a block, and the summary is posted or updated; nothing is posted if the pull request got a new commit, and a summary that fails after the findings is reported as such ([#19](https://github.com/Vijay021212/pr-review-agent/issues/19)).
+- Preflight and the one-review lock: before any slow work, the agent checks that Ollama runs and has the model and that the GitHub token can read (and, when posting, write to) the repository, each problem with its fix and exit code 2; a second review of the same pull request on the same computer is refused, and a lock left by a crash is replaced ([#20](https://github.com/Vijay021212/pr-review-agent/issues/20)).
 
 ## [0.1.0] - 2026-11-12
 

@@ -32,6 +32,11 @@ class FakeChatModel:
     provider: str = "fake"
     model: str = "fake-model"
     calls: list[ModelCall] = field(default_factory=list)
+    ready_error: Exception | None = None  # what check_ready() raises, if anything
+
+    def check_ready(self, deadline: Deadline) -> None:
+        if self.ready_error is not None:
+            raise self.ready_error
 
     def complete_json(
         self, system: str, user: str, schema: dict[str, Any], deadline: Deadline
@@ -59,6 +64,8 @@ class FakeGitHub:
     summaries: list[str] = field(default_factory=list)
     moved_head: str | None = None  # a new commit pushed while the review runs
     summary_error: Exception | None = None  # posting the summary fails with this
+    access_error: Exception | None = None  # what check_access() raises, if anything
+    access_checks: list[tuple[str, bool]] = field(default_factory=list)  # (ref, write)
 
     @classmethod
     def serving(
@@ -82,6 +89,11 @@ class FakeGitHub:
             (root / path).write_text(text, encoding="utf-8")
         root.mkdir(exist_ok=True)
         return root
+
+    def check_access(self, ref: PullRequestRef, *, write: bool, deadline: Deadline) -> None:
+        self.access_checks.append((str(ref), write))
+        if self.access_error is not None:
+            raise self.access_error
 
     # --- Publishing: everything "posted" is recorded instead -----------------------
 
