@@ -64,6 +64,7 @@ def send_with_retries(
                 return response
             problem = f"status {response.status_code}"
             wait = max(wait, wait_for(response) or 0.0)
+            response.close()  # frees the connection of a streamed download before retrying
         if attempt == RETRIES:
             raise ReviewIncomplete(
                 f"{service} kept failing after {RETRIES + 1} attempts ({problem})"
