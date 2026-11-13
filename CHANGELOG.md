@@ -4,6 +4,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+### Added
+
+- The offline evaluation: `pr-review-agent eval eval/cases` reviews every test pull request, stored as folders, with the real agent and without GitHub, and writes a report of every measure per review level (held-out cases separately, average, lowest and highest over repeat runs), a review sheet of every finding, and the raw results ([#21](https://github.com/Vijay021212/pr-review-agent/issues/21)).
+
 ## [0.2.0] - 2026-11-13
 
 The agent explores related code on its own, double-checks its findings, looks for security and performance problems, and posts the review on GitHub.

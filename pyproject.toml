@@ -27,6 +27,7 @@ dependencies = [
     "httpx>=0.28.1",  # calls to GitHub and the model providers
     "pydantic>=2.14.3",  # data types and validation of model output
     "pydantic-settings>=2.16.2",  # settings from PRRA_ environment variables and .env
+    "pyyaml>=6.0.2",  # the evaluation's case files
 ]
 
 [project.scripts]
@@ -44,6 +45,7 @@ dev = [
     "pytest>=9.2.0",      # test runner
     "pytest-cov>=7.1.0",  # coverage measurement and the 90% gate
     "ruff>=0.17.4",       # linter and formatter
+    "types-pyyaml>=6.0.12",  # type information for pyyaml, for mypy
 ]
 
 # The version lives in one place: src/pr_review_agent/version.py.
