@@ -11,6 +11,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 - The explore stage: before looking for problems, the agent reads related code on its own, choosing one read-only tool at a time (search, open a file, list a folder) until it has seen enough, reaches the step limit or uses its share of the time; its notes and the code it opened go to the finding pass, and the summary and run log record every step ([#16](https://github.com/Vijay021212/pr-review-agent/issues/16)).
 - Find pass B: security and performance problems at review levels 4 and 5, reported only with concrete evidence from the code, run on every batch after pass A ([#17](https://github.com/Vijay021212/pr-review-agent/issues/17)).
 - The double-check stage: every finding is moved onto a changed line or dropped, re-checked by the model against the code at the reviewed commit, and kept once when reported twice; weak findings and Low-severity style suggestions are dropped with their reason ([#18](https://github.com/Vijay021212/pr-review-agent/issues/18)).
+- Posting the review on GitHub: without `--dry-run`, every finding is posted in one plain comment review on its line, never an approval or a block, and the summary is posted or updated; nothing is posted if the pull request got a new commit, and a summary that fails after the findings is reported as such ([#19](https://github.com/Vijay021212/pr-review-agent/issues/19)).
 
 ## [0.1.0] - 2026-11-12
 

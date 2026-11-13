@@ -5,7 +5,7 @@
 
 An AI agent that reviews GitHub pull requests the way a careful senior engineer would: it understands the goal of the change, explores the related code on its own, finds real problems at five review levels, double-checks them, and posts one clear review with a recommendation. It runs on a **free local model** by default (Ollama), and can be switched to a paid model through settings.
 
-> **Status:** in development. Reviews in the terminal (`--dry-run`) work; posting on GitHub comes in v0.2.0. Progress is tracked in the [issues](https://github.com/Vijay021212/pr-review-agent/issues), [milestones](https://github.com/Vijay021212/pr-review-agent/milestones) and [project board](https://github.com/users/Vijay021212/projects/2).
+> **Status:** in development. Reviews in the terminal and on GitHub work; measured scores come with v0.3.0. Progress is tracked in the [issues](https://github.com/Vijay021212/pr-review-agent/issues), [milestones](https://github.com/Vijay021212/pr-review-agent/milestones) and [project board](https://github.com/users/Vijay021212/projects/2).
 
 ## Requirements
 
@@ -25,10 +25,13 @@ ollama pull qwen2.5-coder:7b
 ## Usage
 
 ```powershell
-uv run pr-review-agent review https://github.com/owner/repo/pull/7 --dry-run
+uv run pr-review-agent review https://github.com/owner/repo/pull/7            # review and post
+uv run pr-review-agent review https://github.com/owner/repo/pull/7 --dry-run  # show only, post nothing
 ```
 
-The review is printed in the terminal: what the agent understood the pull request is for, the recommendation and the rule that decided it, every finding with its line, and what was reviewed or skipped. Progress messages go to the error stream, so `> review.md` saves the review alone. Posting the review on GitHub arrives in v0.2.0.
+The review is printed in the terminal: what the agent understood the pull request is for, the recommendation and the rule that decided it, every finding with its line, and what was reviewed or skipped. Progress messages go to the error stream, so `> review.md` saves the review alone.
+
+Without `--dry-run`, the findings are posted as comments on their lines, all in one review of type "comment", and the summary is posted as a comment, or updated if an earlier one is there. The agent never approves or blocks a pull request: the recommendation is informational, and a person decides. Nothing is posted if the pull request gets a new commit during the review. Posting needs a GitHub token with **Contents: read** and **Pull requests: write**.
 
 Exit codes: `0` the review is complete; `1` the review is incomplete; `2` bad input or a setup problem, with a message saying how to fix it.
 

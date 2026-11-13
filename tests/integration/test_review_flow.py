@@ -222,3 +222,74 @@ def test_exploring_finds_the_caller_and_the_finding_names_it(
         ("open_file", "src/checkout.py", "lines 1-4 of 4"),
         ("done", "", "done"),
     ]
+
+
+# --- Posting the review (v0.2.0) -------------------------------------------------------
+
+
+def test_a_review_is_posted_when_not_a_dry_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("PRRA_GITHUB_TOKEN", "ghp_" + "t" * 36)
+    world = World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found(), KEEP_ONE)
+    assert cli.main(["review", LINK]) == 0
+    (review,) = world.github.reviews
+    assert [(c.path, c.line) for c in review.comments] == [("src/cart.py", 3)]
+    (summary,) = world.github.summaries
+    assert "**Recommendation: Request Changes**" in summary
+    err = capsys.readouterr().err
+    assert f"Findings posted: {LINK}#pullrequestreview-1" in err
+    assert f"Summary posted: {LINK}#issuecomment-1" in err
+    log = next((world.settings[0].state_dir / "runs").glob("*.jsonl"))
+    events = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+    posted = next(e for e in events if e["event"] == "review posted")
+    assert posted["summary_url"] == f"{LINK}#issuecomment-1"
+
+
+def test_the_public_function_returns_the_links_and_the_publish_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    World(monkeypatch, understanding(), EXPLORE_DONE, found(), found())
+    result = review_pull_request(LINK, settings=Settings(github_token="ghp_" + "t" * 36))
+    assert result.review_url is None  # nothing found, so no review, only the summary
+    assert result.summary_url == f"{LINK}#issuecomment-1"
+    assert result.timings[-1].stage == "publish"
+    assert not result.dry_run
+
+
+def test_a_new_commit_during_the_review_means_nothing_is_posted(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("PRRA_GITHUB_TOKEN", "ghp_" + "t" * 36)
+    world = World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found(), KEEP_ONE)
+    world.github.moved_head = "a" * 40
+    assert cli.main(["review", LINK]) == 1
+    assert world.github.reviews == []
+    assert world.github.summaries == []
+    err = capsys.readouterr().err
+    assert "got a new commit (aaaaaaa)" in err
+    assert "Nothing was posted." in err
+
+
+def test_a_failed_summary_after_the_findings_is_reported_as_such(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("PRRA_GITHUB_TOKEN", "ghp_" + "t" * 36)
+    world = World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found(), KEEP_ONE)
+    world.github.summary_error = ReviewIncomplete("GitHub answered 502")
+    assert cli.main(["review", LINK]) == 1
+    assert len(world.github.reviews) == 1
+    err = capsys.readouterr().err
+    assert "the findings were posted" in err
+    assert "Nothing was posted." not in err
+
+
+def test_with_nothing_found_only_the_summary_link_is_printed(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("PRRA_GITHUB_TOKEN", "ghp_" + "t" * 36)
+    World(monkeypatch, understanding(), EXPLORE_DONE, found(), found())
+    assert cli.main(["review", LINK]) == 0
+    err = capsys.readouterr().err
+    assert "Summary posted:" in err
+    assert "Findings posted" not in err

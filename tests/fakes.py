@@ -7,7 +7,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from pr_review_agent.domain import Deadline, ModelReply, PullRequest, PullRequestRef, SetupError
+from pr_review_agent.domain import (
+    Deadline,
+    ModelReply,
+    PullRequest,
+    PullRequestRef,
+    ReviewComment,
+    SetupError,
+)
 
 
 @dataclass(frozen=True)
@@ -48,6 +55,10 @@ class FakeGitHub:
     repository: dict[str, str] = field(default_factory=dict)
     reads: list[PullRequestRef] = field(default_factory=list)
     snapshots: list[str] = field(default_factory=list)  # head commits downloaded
+    reviews: list[PostedReview] = field(default_factory=list)
+    summaries: list[str] = field(default_factory=list)
+    moved_head: str | None = None  # a new commit pushed while the review runs
+    summary_error: Exception | None = None  # posting the summary fails with this
 
     @classmethod
     def serving(
@@ -71,6 +82,37 @@ class FakeGitHub:
             (root / path).write_text(text, encoding="utf-8")
         root.mkdir(exist_ok=True)
         return root
+
+    # --- Publishing: everything "posted" is recorded instead -----------------------
+
+    def head_sha(self, ref: PullRequestRef, deadline: Deadline) -> str:
+        return self.moved_head or self.pull_requests[str(ref)].head_sha
+
+    def post_review(
+        self,
+        ref: PullRequestRef,
+        commit_sha: str,
+        body: str,
+        comments: tuple[ReviewComment, ...],
+        deadline: Deadline,
+    ) -> str:
+        self.reviews.append(PostedReview(commit_sha, body, comments))
+        return f"{ref.link}#pullrequestreview-{len(self.reviews)}"
+
+    def upsert_summary(
+        self, ref: PullRequestRef, body: str, marker: str, deadline: Deadline
+    ) -> str:
+        if self.summary_error is not None:
+            raise self.summary_error
+        self.summaries.append(body)
+        return f"{ref.link}#issuecomment-1"
+
+
+@dataclass(frozen=True)
+class PostedReview:
+    commit_sha: str
+    body: str
+    comments: tuple[ReviewComment, ...]
 
 
 def explore_step(action: str, **fields: Any) -> str:

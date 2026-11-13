@@ -26,20 +26,22 @@ def review_pull_request(
         print(result.recommendation.value, len(result.findings.kept))
 
     With no `settings`, they're read from the `PRRA_` environment variables and `.env`, as
-    for the command line. With `dry_run=True` nothing is written to GitHub. Every run
-    writes a run log to `<state dir>/runs/`; its path is logged to the `pr_review_agent`
-    logger when the review starts.
+    for the command line. Without `dry_run` the findings and the summary are posted on the
+    pull request, and the result holds their links; with `dry_run=True` nothing is written
+    to GitHub. Every run writes a run log to `<state dir>/runs/`; its path is logged to
+    the `pr_review_agent` logger when the review starts.
 
     Raises `SetupError` for bad input or a setup problem (the message says how to fix it),
     and `ReviewIncomplete` when the review couldn't be completed.
     """
     ref = PullRequestRef.parse(link)
     settings = settings if settings is not None else Settings()
-    if not dry_run:
+    if not dry_run and settings.github_token is None:
         raise SetupError(
-            "Posting the review on GitHub isn't available in this version yet.",
-            "Add --dry-run to the command (in Python, dry_run=True) to see the review without "
-            "posting it.",
+            "Posting the review on GitHub needs a GitHub token.",
+            "Set PRRA_GITHUB_TOKEN (or GITHUB_TOKEN) to a fine-grained token with "
+            "Contents: read and Pull requests: write, or add --dry-run (in Python, "
+            "dry_run=True) to only see the review.",
         )
     components = factory.build(settings)
     run_log = RunLog.create(settings.state_dir, ref, components.masker)
