@@ -1,0 +1,5 @@
+title: Name the page size
+description: Replaces the number 20, used twice, with a named constant.
+kind: clean
+recommendation: Approve
+held_out: true

@@ -1,0 +1,14 @@
+title: Return None for the average of an empty list
+description: average() used to raise ZeroDivisionError for an empty list. It now returns None instead,
+  which is easier for callers to check.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: stats.py
+  marker: return None
+  lines: 1
+  level: 3
+  category: bug
+  what: report.summary_line() multiplies average()'s result by 100, so an empty list now raises TypeError
+    there instead.

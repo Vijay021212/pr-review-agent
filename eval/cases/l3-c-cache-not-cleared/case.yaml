@@ -1,0 +1,13 @@
+title: Check prices before saving them
+description: set_price() now refuses negative prices.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: prices.py
+  marker: _prices[sku] = price
+  lines: 1
+  level: 3
+  category: bug
+  what: The rewrite dropped `_cache.pop(sku, None)`, so price_of() keeps returning the old, cached price
+    after a change.

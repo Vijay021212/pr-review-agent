@@ -1,0 +1,13 @@
+title: Let customers spend from their wallet
+description: Adds withdraw(), so customers can pay with their wallet balance.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: wallet.py
+  marker: 'if wallet.balance >= amount:'
+  lines: 3
+  level: 5
+  category: bug
+  what: withdraw() checks and changes the balance without LOCK; two payments at once can both pass the
+    check and overdraw the wallet.

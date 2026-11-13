@@ -1,0 +1,13 @@
+title: Let shoppers add items to a cart
+description: add_item() adds an item to a cart. When no cart is given, it starts a new one for the shopper.
+kind: planted
+recommendation: Request Changes
+held_out: true
+problems:
+- file: cart.py
+  marker: 'def add_item(item: str, cart: list[str] = [])'
+  lines: 1
+  level: 1
+  category: bug
+  what: The default list is created once and shared, so every shopper without a cart gets the same list
+    and sees other shoppers' items.

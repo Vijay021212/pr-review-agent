@@ -1,0 +1,13 @@
+title: Put send()'s subject first
+description: Reorders send()'s parameters so the subject comes first, like in the template engine.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: mailer.py
+  marker: 'def send(subject: str, to: str, body: str)'
+  lines: 1
+  level: 3
+  category: bug
+  what: notify.welcome() still calls send(email, subject, body), so welcome emails now go to the address
+    'Welcome' with the email as subject.

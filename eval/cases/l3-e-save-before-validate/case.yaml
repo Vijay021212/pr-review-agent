@@ -1,0 +1,14 @@
+title: Store email addresses in lower case
+description: Email addresses are now stored trimmed and in lower case, so 'Ada@Example.com ' and 'ada@example.com'
+  are the same account.
+kind: planted
+recommendation: Request Changes
+held_out: true
+problems:
+- file: signup.py
+  marker: '    save(account)'
+  lines: 1
+  level: 3
+  category: bug
+  what: The account is saved before validate() runs, so an invalid email is stored even though sign_up()
+    then raises ValueError.
