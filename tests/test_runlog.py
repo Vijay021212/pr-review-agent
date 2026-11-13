@@ -18,7 +18,7 @@ from pr_review_agent.pipeline import run_review
 from pr_review_agent.runlog import RunLog
 from pr_review_agent.secrets import Masker
 from tests.builders import make_file, make_finding, make_pull_request
-from tests.fakes import FakeChatModel, FakeGitHub
+from tests.fakes import EXPLORE_DONE, FakeChatModel, FakeGitHub
 
 REF = PullRequestRef(owner="octo", repo="shop", number=7)
 MOMENT = datetime(2026, 11, 11, 14, 25, 30, 123000, tzinfo=UTC)
@@ -88,6 +88,7 @@ def test_a_complete_review_records_every_step_in_order(tmp_path: Path) -> None:
     run_log = review(
         tmp_path,
         UNDERSTANDING,
+        EXPLORE_DONE,
         findings(finding(), finding(file="elsewhere.py")),
         files=(make_file("src/app.py"), make_file("uv.lock")),
     )
@@ -102,6 +103,13 @@ def test_a_complete_review_records_every_step_in_order(tmp_path: Path) -> None:
         "stage finished",
         "stage started",
         "model call",
+        "stage finished",
+        "stage started",
+        "stage finished",
+        "stage started",
+        "model call",
+        "tool call",
+        "exploring stopped",
         "stage finished",
         "stage started",
         "model call",
@@ -136,14 +144,14 @@ def test_a_complete_review_records_every_step_in_order(tmp_path: Path) -> None:
 
 
 def test_a_retry_is_recorded_with_its_reason(tmp_path: Path) -> None:
-    events = review(tmp_path, '{"goal": ""}', UNDERSTANDING, findings()).events()
+    events = review(tmp_path, '{"goal": ""}', UNDERSTANDING, EXPLORE_DONE, findings()).events()
     call = next(e for e in events if e["event"] == "model call")
     assert call["attempts"] == 2
     assert "goal" in call["retry_reason"]
 
 
 def test_an_incomplete_review_records_the_failing_stage_and_why(tmp_path: Path) -> None:
-    events = review(tmp_path, UNDERSTANDING, "not json", "not json").events()
+    events = review(tmp_path, UNDERSTANDING, EXPLORE_DONE, "not json", "not json").events()
     failed = next(e for e in events if e["event"] == "stage failed")
     assert failed["stage"] == "find"
     assert "didn't match the required format" in failed["error"]
@@ -174,7 +182,7 @@ def test_a_setup_problem_is_recorded_with_its_fix(tmp_path: Path) -> None:
 def test_secrets_quoted_by_the_model_are_masked_in_the_log(tmp_path: Path) -> None:
     key = "AKIA" + "IOSFODNN7EXAMPLE"
     reply = findings(finding(explanation=f"Hard-coded key {key}."))
-    written = review(tmp_path, UNDERSTANDING, reply).path.read_text(encoding="utf-8")
+    written = review(tmp_path, UNDERSTANDING, EXPLORE_DONE, reply).path.read_text(encoding="utf-8")
     assert key not in written
 
 
@@ -184,7 +192,7 @@ def test_the_public_function_writes_a_log_and_names_it(
     def build(settings: Settings) -> Components:
         return Components(
             FakeGitHub.serving(make_pull_request()),
-            FakeChatModel([UNDERSTANDING, findings()]),
+            FakeChatModel([UNDERSTANDING, EXPLORE_DONE, findings()]),
             Masker(),
         )
 

@@ -183,6 +183,7 @@ class ExploreStop(StrEnum):
     DONE = "done"
     STEP_LIMIT = "step limit"
     TIME_LIMIT = "time limit"
+    REPEATING = "repeating"  # the model kept asking for steps it had already taken
 
 
 class RecommendationValue(StrEnum):
@@ -389,6 +390,7 @@ class ExploredContext(_Frozen):
     project_map: str = ""
     tool_calls: tuple[ToolCall, ...] = ()
     excerpts: tuple[Excerpt, ...] = ()
+    notes: tuple[NonEmptyStr, ...] = ()  # what the model wrote down as it explored
     stopped_by: ExploreStop | None = None  # None when exploring didn't run
 
 

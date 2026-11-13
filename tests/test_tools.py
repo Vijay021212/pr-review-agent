@@ -10,7 +10,13 @@ import pytest
 
 from pr_review_agent import tools
 from pr_review_agent.domain import ToolAction
-from pr_review_agent.tools import MAX_ENTRIES, MAX_LINES, MAX_MATCHES, ReadOnlyTools
+from pr_review_agent.tools import (
+    MAX_ENTRIES,
+    MAX_LINES,
+    MAX_MATCHES,
+    ReadOnlyTools,
+    normalize_path,
+)
 
 
 def make_repo(root: Path, files: dict[str, str | bytes]) -> ReadOnlyTools:
@@ -194,6 +200,15 @@ def test_paths_outside_the_repository_are_refused(repo: ReadOnlyTools, path: str
     result = repo.run(ToolAction.OPEN_FILE, path)
     assert result.output.startswith("Refused:")
     assert "secret" not in result.output
+
+
+@pytest.mark.parametrize(
+    ("written", "normal"),
+    [("./src\\app.py", "src/app.py"), ("/src/./app.py/", "src/app.py"), ("", ""), (".", ""),
+     ("src/../x.py", "src/../x.py")],
+)  # fmt: skip
+def test_paths_are_written_the_way_github_writes_them(written: str, normal: str) -> None:
+    assert normalize_path(written) == normal
 
 
 def test_an_absolute_path_is_read_inside_the_repository(repo: ReadOnlyTools) -> None:

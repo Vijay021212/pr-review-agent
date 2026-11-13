@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -70,3 +71,14 @@ class FakeGitHub:
             (root / path).write_text(text, encoding="utf-8")
         root.mkdir(exist_ok=True)
         return root
+
+
+def explore_step(action: str, **fields: Any) -> str:
+    """One answer of the explore stage, with every field it requires."""
+    answer = {"action": action, "path": "", "text": "", "start_line": 1, "notes": ""}
+    answer["reason"] = f"Because {action}."
+    return json.dumps({**answer, **fields})
+
+
+EXPLORE_DONE = explore_step("done", reason="The diff shows everything the review needs.")
+"""The explore stage's answer when the model needs to read nothing more."""
