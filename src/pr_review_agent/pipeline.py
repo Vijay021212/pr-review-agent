@@ -1,6 +1,7 @@
 """Runs the review stages in a fixed order (design section 2, ADR-002).
 
-    fetch -> select files -> understand -> snapshot -> explore -> find (passes A, B) -> recommend
+    fetch -> select files -> understand -> snapshot -> explore -> find (passes A, B)
+    -> double-check -> recommend
 
 **Failure rule (NFR-4):** if any stage fails, or the hard time limit is reached, the
 pipeline stops at once and raises `ReviewIncomplete`: nothing more runs, no recommendation
@@ -42,6 +43,7 @@ from pr_review_agent.stages.explore import explore
 from pr_review_agent.stages.fetch import fetch
 from pr_review_agent.stages.find import PASSES, find_problems
 from pr_review_agent.stages.understand import understand
+from pr_review_agent.stages.verify import verify
 from pr_review_agent.version import __version__
 
 log = logging.getLogger("pr_review_agent")
@@ -174,7 +176,12 @@ def _run_stages(
                 calls += found.calls
                 kept += found.findings
                 dropped += found.dropped
-        findings = CheckedFindings(kept=tuple(kept), dropped=tuple(dropped))
+        with stages.run("double-check", f"Double-checking {len(kept)} finding(s)"):
+            findings, verify_calls = verify(
+                tuple(kept), tuple(dropped), pull_request.files, root, model, deadline
+            )
+            _record_calls(run_log, "double-check", verify_calls)
+            calls += verify_calls
         _record_findings(run_log, findings)
         with stages.run("recommend", "Applying the recommendation rules"):
             changed_paths = [file.path for file in pull_request.files]
