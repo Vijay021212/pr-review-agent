@@ -566,6 +566,10 @@ class ChatModel(Protocol):
         self, system: str, user: str, schema: dict[str, Any], deadline: Deadline
     ) -> ModelReply: ...
 
+    def check_ready(self, deadline: Deadline) -> None:
+        """Raise `SetupError` with the fix if the model can't be used (FR-16)."""
+        ...
+
 
 class GitHub(Protocol):
     """Everything the review needs from GitHub (design section 3)."""
@@ -578,6 +582,11 @@ class GitHub(Protocol):
         self, pull_request: PullRequest, folder: Path, deadline: Deadline
     ) -> Path:
         """Unpack the repository at the reviewed commit into `folder`; return its root."""
+        ...
+
+    def check_access(self, ref: PullRequestRef, *, write: bool, deadline: Deadline) -> None:
+        """Raise `SetupError` with the fix if the token can't read (or, for `write`, post
+        on) the repository, as far as GitHub tells in advance (FR-16)."""
         ...
 
     def head_sha(self, ref: PullRequestRef, deadline: Deadline) -> str:

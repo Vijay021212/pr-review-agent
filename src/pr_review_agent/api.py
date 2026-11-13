@@ -9,7 +9,7 @@ import logging
 
 from pr_review_agent import factory, pipeline
 from pr_review_agent.config import Settings
-from pr_review_agent.domain import Deadline, PullRequestRef, ReviewResult, SetupError
+from pr_review_agent.domain import Deadline, PullRequestRef, ReviewResult
 from pr_review_agent.runlog import RunLog
 
 log = logging.getLogger("pr_review_agent")
@@ -36,13 +36,6 @@ def review_pull_request(
     """
     ref = PullRequestRef.parse(link)
     settings = settings if settings is not None else Settings()
-    if not dry_run and settings.github_token is None:
-        raise SetupError(
-            "Posting the review on GitHub needs a GitHub token.",
-            "Set PRRA_GITHUB_TOKEN (or GITHUB_TOKEN) to a fine-grained token with "
-            "Contents: read and Pull requests: write, or add --dry-run (in Python, "
-            "dry_run=True) to only see the review.",
-        )
     components = factory.build(settings)
     run_log = RunLog.create(settings.state_dir, ref, components.masker)
     log.info("Run log: %s", run_log.path)

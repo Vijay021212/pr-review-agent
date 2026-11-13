@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from pr_review_agent import ReviewIncomplete, Settings, cli, review_pull_request
-from pr_review_agent.domain import FileStatus, RecommendationValue
+from pr_review_agent.domain import FileStatus, RecommendationValue, SetupError
 from pr_review_agent.factory import Components
 from pr_review_agent.secrets import Masker
 from tests.builders import make_file, make_pull_request
@@ -293,3 +293,28 @@ def test_with_nothing_found_only_the_summary_link_is_printed(
     err = capsys.readouterr().err
     assert "Summary posted:" in err
     assert "Findings posted" not in err
+
+
+# --- Preflight and the lock (v0.2.0) ---------------------------------------------------
+
+
+def test_a_setup_problem_is_found_before_any_review_work(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    world = World(monkeypatch)
+    world.model.ready_error = SetupError("Ollama isn't running at x.", "Start the Ollama app.")
+    assert cli.main(["review", LINK, "--dry-run"]) == 2
+    assert world.github.reads == []  # the pull request wasn't even read
+    assert "Setup problem: Ollama isn't running at x." in capsys.readouterr().err
+
+
+def test_a_second_review_of_the_same_pull_request_is_refused(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    world = World(monkeypatch)
+    locks = Settings().state_dir / "locks"
+    locks.mkdir(parents=True)
+    (locks / "octo-shop-7.lock").write_text("another run", encoding="utf-8")
+    assert cli.main(["review", LINK, "--dry-run"]) == 2
+    assert world.model.calls == []
+    assert "is already running on this computer" in capsys.readouterr().err

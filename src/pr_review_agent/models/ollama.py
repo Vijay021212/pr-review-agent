@@ -71,19 +71,48 @@ class OllamaChatModel:
                 send, service="Ollama", deadline=deadline, sleep=self._sleep
             )
         except httpx.ConnectError:
-            raise SetupError(
-                f"Ollama isn't running at {self._endpoint}.",
-                "Start the Ollama app (or run `ollama serve`), then try again.",
-            ) from None
+            raise self._not_running() from None
         return self._read(response)
+
+    def check_ready(self, deadline: Deadline) -> None:
+        """Ollama answers and has the model, checked with its model list before any review
+        work (FR-16): a quick call, unlike loading the model."""
+        url = self._url.removesuffix("/api/chat") + "/api/tags"
+
+        def send() -> httpx.Response:
+            return self._client.get(url, timeout=httpx.Timeout(30.0, connect=CONNECT_SECONDS))
+
+        try:
+            response = send_with_retries(
+                send, service="Ollama", deadline=deadline, sleep=self._sleep
+            )
+        except httpx.ConnectError:
+            raise self._not_running() from None
+        if response.is_error:
+            raise ReviewIncomplete(
+                f"Ollama couldn't list its models (status {response.status_code}: "
+                f"{_error_text(response)})"
+            )
+        names = {model.get("name") for model in response.json().get("models", [])}
+        if self._model not in names and f"{self._model}:latest" not in names:
+            raise self._not_downloaded()
+
+    def _not_running(self) -> SetupError:
+        return SetupError(
+            f"Ollama isn't running at {self._endpoint}.",
+            "Start the Ollama app (or run `ollama serve`), then try again.",
+        )
+
+    def _not_downloaded(self) -> SetupError:
+        return SetupError(
+            f"The model {self._model} isn't downloaded in Ollama.",
+            f"Run `ollama pull {self._model}`, or set PRRA_MODEL to a model you have "
+            "(`ollama list` shows them).",
+        )
 
     def _read(self, response: httpx.Response) -> ModelReply:
         if response.status_code == 404 and "not found" in _error_text(response):
-            raise SetupError(
-                f"The model {self._model} isn't downloaded in Ollama.",
-                f"Run `ollama pull {self._model}`, or set PRRA_MODEL to a model you have "
-                "(`ollama list` shows them).",
-            )
+            raise self._not_downloaded()
         if response.is_error:
             raise ReviewIncomplete(
                 f"Ollama refused the request (status {response.status_code}: "

@@ -1,6 +1,6 @@
 """Runs the review stages in a fixed order (design section 2, ADR-002).
 
-    fetch -> select files -> understand -> snapshot -> explore -> find (passes A, B)
+    preflight -> fetch -> select files -> understand -> snapshot -> explore -> find (A, B)
     -> double-check -> recommend -> publish (unless it is a dry run)
 
 **Failure rule (NFR-4):** if any stage fails, or the hard time limit is reached, the
@@ -34,6 +34,7 @@ from pr_review_agent.domain import (
 )
 from pr_review_agent.factory import Components
 from pr_review_agent.github.snapshot import snapshot
+from pr_review_agent.lock import review_lock
 from pr_review_agent.recommendation import recommend
 from pr_review_agent.runlog import RunLog
 from pr_review_agent.selection import select_files
@@ -42,6 +43,7 @@ from pr_review_agent.stages import ModelCall
 from pr_review_agent.stages.explore import explore
 from pr_review_agent.stages.fetch import fetch
 from pr_review_agent.stages.find import PASSES, find_problems
+from pr_review_agent.stages.preflight import preflight
 from pr_review_agent.stages.publish import publish
 from pr_review_agent.stages.understand import understand
 from pr_review_agent.stages.verify import verify
@@ -103,7 +105,9 @@ def run_review(
         settings=settings.model_dump(mode="json", exclude={"github_token", "api_key"}),
     )
     try:
-        result = _run_stages(ref, components, settings, deadline, dry_run, run_log)
+        # One review of a pull request at a time, held until posting is done (FR-20).
+        with review_lock(settings.state_dir, ref, settings.time_limit_seconds):
+            result = _run_stages(ref, components, settings, deadline, dry_run, run_log)
     except SetupError as error:
         run_log.record("review stopped by a setup problem", problem=error.problem, fix=error.fix)
         raise
@@ -132,6 +136,8 @@ def _run_stages(
     calls: list[ModelCall] = []
     model = components.model
 
+    with stages.run("preflight", "Checking the setup"):
+        preflight(ref, settings, components.github, model, deadline, dry_run=dry_run)
     with stages.run("fetch", f"Reading pull request {ref}"):
         pull_request = fetch(components.github, ref, deadline)
         run_log.record(

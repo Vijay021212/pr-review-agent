@@ -98,6 +98,8 @@ def test_a_complete_review_records_every_step_in_order(tmp_path: Path) -> None:
     assert [event["event"] for event in events] == [
         "review started",
         "stage started",
+        "stage finished",
+        "stage started",
         "pull request read",
         "stage finished",
         "stage started",
