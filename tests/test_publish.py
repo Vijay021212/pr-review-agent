@@ -38,7 +38,9 @@ def test_every_finding_goes_in_one_review_of_type_comment() -> None:
         ("src/app.py", 4, Side.OLD),
     ]
     assert review.comments[0].body.startswith("**High · bug · level 2 · confirmed**")
-    assert review.body.startswith("pr-review-agent found 2 problems in commit `0123456`")
+    assert review.body.startswith(
+        "pr-review-agent found 2 problems in commit `0123456`, shown on their lines."
+    )
     assert review_url == f"{PULL_REQUEST.ref.link}#pullrequestreview-1"
     assert summary_url == f"{PULL_REQUEST.ref.link}#issuecomment-1"
 
@@ -46,7 +48,9 @@ def test_every_finding_goes_in_one_review_of_type_comment() -> None:
 def test_one_problem_is_counted_in_the_singular() -> None:
     github = FakeGitHub.serving(PULL_REQUEST)
     post(github, BUG)
-    assert github.reviews[0].body.startswith("pr-review-agent found 1 problem in commit")
+    assert github.reviews[0].body.startswith(
+        "pr-review-agent found 1 problem in commit `0123456`, shown on its line."
+    )
 
 
 def test_the_summary_follows_with_its_hidden_marker() -> None:

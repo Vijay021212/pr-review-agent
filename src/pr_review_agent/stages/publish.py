@@ -54,10 +54,12 @@ def publish(
             )
             for finding in kept
         )
-        problems = f"{len(kept)} problem{'' if len(kept) == 1 else 's'}"
+        one = len(kept) == 1
+        problems = "1 problem" if one else f"{len(kept)} problems"
+        where = "its line" if one else "their lines"
         body = (
             f"pr-review-agent found {problems} in commit `{pull_request.head_sha[:7]}`, shown "
-            "on their lines. The summary comment explains what was reviewed and how."
+            f"on {where}. The summary comment explains what was reviewed and how."
         )
         review_url = github.post_review(ref, pull_request.head_sha, body, comments, deadline)
 
