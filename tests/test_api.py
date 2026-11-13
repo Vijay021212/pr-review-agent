@@ -26,6 +26,7 @@ REPLIES = [
     ),
     EXPLORE_DONE,
     json.dumps({"findings": []}),
+    json.dumps({"findings": []}),
 ]
 
 

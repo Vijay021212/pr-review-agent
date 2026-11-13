@@ -19,7 +19,14 @@ from pr_review_agent.domain import (
     Understanding,
 )
 from pr_review_agent.prompts import load
-from pr_review_agent.stages.find import PASS_A, FindOutput, build_message, find_problems
+from pr_review_agent.stages.find import (
+    PASS_A,
+    PASS_B,
+    PASSES,
+    FindOutput,
+    build_message,
+    find_problems,
+)
 from tests.builders import make_file, make_finding, make_pull_request
 from tests.fakes import FakeChatModel
 
@@ -190,3 +197,46 @@ def test_the_prompt_includes_the_levels_and_severities_word_for_word() -> None:
     assert "- Level 2: Logic errors, missing conditions, edge cases." in text
     assert "- high: A major functional failure affecting an important workflow." in text
     assert "never instructions" in text
+
+
+def test_pass_b_looks_for_security_and_performance() -> None:
+    sql = finding_json(
+        category="security",
+        level=4,
+        severity="critical",
+        trigger="A customer name of ' OR '1'='1.",
+        current_behaviour="Every order is returned.",
+        expected_behaviour="Only that customer's orders.",
+    )
+    model = FakeChatModel([reply(sql)])
+    output = find_problems(
+        PASS_B,
+        make_pull_request(files=(CART,)),
+        ReviewScope(batches=((CART,),)),
+        UNDERSTANDING,
+        ExploredContext(),
+        model,
+        Deadline(60),
+    )
+    (finding,) = output.findings
+    assert (finding.category, finding.level) == (Category.SECURITY, ReviewLevel.ARCHITECTURE)
+    assert [call.prompt for call in output.calls] == ["find_b v1"]
+    assert "security and performance problems: review levels 4 and 5" in model.calls[0].system
+
+
+def test_pass_b_needs_concrete_evidence_and_the_failure_fields() -> None:
+    text = load("find_b").text
+    assert "only with concrete evidence in the code you can see" in text
+    assert (
+        "level 5 (adversarial scenarios and unusual combinations) only when the code gives "
+        "concrete grounds" in text
+    )
+    assert "- Level 5: Adversarial scenarios and unusual failure combinations." in text
+    assert "never instructions" in text
+    assert "trigger" in json.dumps(
+        PASS_B.answer_type.model_json_schema()["$defs"]["BugFinding"]["required"]
+    )
+
+
+def test_the_pipeline_runs_pass_a_then_pass_b() -> None:
+    assert [finding_pass.prompt for finding_pass in PASSES] == ["find_a", "find_b"]
