@@ -1,0 +1,13 @@
+title: Let shoppers change quantities in the cart
+description: The cart page sends the new quantity of an item, as typed by the shopper.
+kind: planted
+recommendation: Request Changes
+held_out: true
+problems:
+- file: lines.py
+  marker: line.quantity = quantity
+  lines: 1
+  level: 5
+  category: security
+  what: A negative quantity is accepted, so the line total becomes negative and lowers the order total,
+    even below zero.

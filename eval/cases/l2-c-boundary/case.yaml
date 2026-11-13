@@ -1,0 +1,13 @@
+title: Grade quiz scores
+description: 'Turns a quiz score from 0 to 100 into a letter: 90 or more is an A, 75 or more a B, anything
+  lower a C.'
+kind: planted
+recommendation: Needs Human Review
+held_out: false
+problems:
+- file: grades.py
+  marker: 'if score > 90:'
+  lines: 1
+  level: 2
+  category: bug
+  what: 'A score of exactly 90 gets a B instead of an A: the comparison should be >= 90.'

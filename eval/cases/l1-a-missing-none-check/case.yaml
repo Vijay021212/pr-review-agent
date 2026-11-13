@@ -1,0 +1,14 @@
+title: Look up a user's email address
+description: Adds email_for() so the newsletter job can find a user's address by id. The job reads ids
+  from old subscriptions, so some of them no longer exist.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: users.py
+  marker: return user["email"]
+  lines: 1
+  level: 1
+  category: bug
+  what: USERS.get() returns None for an unknown id, so user['email'] raises TypeError and the newsletter
+    job stops.

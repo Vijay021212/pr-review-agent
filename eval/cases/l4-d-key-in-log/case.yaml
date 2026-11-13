@@ -1,0 +1,13 @@
+title: Log calls to the carrier API
+description: Adds a log line for every call to the carrier's API, to help debug failed deliveries. The
+  logs are shipped to the shared log service.
+kind: planted
+recommendation: Request Changes
+held_out: true
+problems:
+- file: carrier.py
+  marker: log.info("Calling %s with key %s", url, api_key)
+  lines: 1
+  level: 4
+  category: security
+  what: The carrier API key is written to the logs, which many people can read in the shared log service.

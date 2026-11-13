@@ -1,0 +1,12 @@
+title: Don't charge free orders
+description: Orders that cost nothing (a 100% coupon) no longer go to the card processor.
+kind: planted
+recommendation: Request Changes
+held_out: true
+problems:
+- file: orders.py
+  marker: 'if order.total == 0:'
+  lines: 3
+  level: 3
+  category: bug
+  what: The early return also skips reserve_stock(), so free orders never take their item out of stock.

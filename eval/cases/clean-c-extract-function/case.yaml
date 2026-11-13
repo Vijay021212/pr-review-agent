@@ -1,0 +1,5 @@
+title: Extract the tax calculation
+description: Moves the tax calculation into its own function, without changing any result.
+kind: clean
+recommendation: Approve
+held_out: false

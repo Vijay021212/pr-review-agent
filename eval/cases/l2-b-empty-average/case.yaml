@@ -1,0 +1,12 @@
+title: Show each product's average rating
+description: Every product page now shows the average of its ratings. New products have no ratings yet.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: ratings.py
+  marker: return sum(ratings) / len(ratings)
+  lines: 1
+  level: 2
+  category: bug
+  what: A product without ratings has an empty list, so this divides by zero and the product page fails.

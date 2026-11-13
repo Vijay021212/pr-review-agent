@@ -1,0 +1,14 @@
+title: List the days of a booking
+description: booking_days() lists every day of a booking, from the first day to the last, both included,
+  for the cleaning schedule.
+kind: planted
+recommendation: Needs Human Review
+held_out: true
+problems:
+- file: bookings.py
+  marker: 'while day < last:'
+  lines: 1
+  level: 2
+  category: bug
+  what: The loop stops before the last day, so the last day of every booking is missing from the cleaning
+    schedule.

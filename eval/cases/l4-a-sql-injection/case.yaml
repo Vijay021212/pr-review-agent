@@ -1,0 +1,13 @@
+title: Search orders by customer name
+description: Support staff can now search orders by typing a customer's name.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: search.py
+  marker: query = f"SELECT id, total FROM orders WHERE customer
+  lines: 1
+  level: 4
+  category: security
+  what: The name typed by staff goes straight into the SQL text, so input like ' OR '1'='1 returns every
+    order (SQL injection).

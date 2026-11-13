@@ -1,0 +1,13 @@
+title: Discount for members and big orders
+description: A 10% discount now applies to members, and to anyone whose order is over 100.
+kind: planted
+recommendation: Request Changes
+held_out: true
+problems:
+- file: discounts.py
+  marker: return is_member and total > 100
+  lines: 1
+  level: 2
+  category: bug
+  what: The rule says members OR orders over 100, but `and` gives the discount only to members with orders
+    over 100.

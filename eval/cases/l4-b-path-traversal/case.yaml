@@ -1,0 +1,14 @@
+title: Download monthly reports
+description: Shop owners can download a report with /reports?name=<file name>; the name comes from the
+  query string.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: reports.py
+  marker: with open(os.path.join(REPORTS_DIR, name)
+  lines: 1
+  level: 4
+  category: security
+  what: A name like ../../etc/passwd leaves the reports folder, so any file on the server can be downloaded
+    (path traversal).

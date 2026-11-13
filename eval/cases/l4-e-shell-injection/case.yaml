@@ -1,0 +1,13 @@
+title: Make thumbnails of uploaded images
+description: Uploaded product images get a thumbnail. The file name is the one the uploader chose.
+kind: planted
+recommendation: Request Changes
+held_out: true
+problems:
+- file: thumbnails.py
+  marker: subprocess.run(f"convert {file_name}
+  lines: 1
+  level: 4
+  category: security
+  what: The uploader's file name goes into a shell command, so a name like 'a.png; rm -rf /' runs any
+    command (shell injection).
