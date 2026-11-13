@@ -4,6 +4,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-13
+
+The agent explores related code on its own, double-checks its findings, looks for security and performance problems, and posts the review on GitHub.
+
 ### Added
 
 - The repository snapshot: the reviewed commit's files, downloaded from the fork for fork pull requests and unpacked safely into a temporary read-only folder that's removed after the review ([#14](https://github.com/Vijay021212/pr-review-agent/issues/14)).
@@ -42,5 +46,6 @@ The first review in the terminal: `pr-review-agent review <link> --dry-run` prin
 
 - Reviews saved to a file on Windows are written as UTF-8; time limits under a minute are written in seconds; the "posting isn't available yet" message names `--dry-run` ([#44](https://github.com/Vijay021212/pr-review-agent/issues/44)).
 
-[Unreleased]: https://github.com/Vijay021212/pr-review-agent/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Vijay021212/pr-review-agent/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Vijay021212/pr-review-agent/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Vijay021212/pr-review-agent/releases/tag/v0.1.0
