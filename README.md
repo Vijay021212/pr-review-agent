@@ -61,7 +61,33 @@ The full list is in [design section 10](docs/design.md#10-settings).
 
 ## How it works
 
-*Available from v0.2.0.* The design is in [docs/design.md](docs/design.md).
+One agent works through fixed stages; the model is used only where judgement is needed, and every decision that must be predictable is plain code.
+
+```mermaid
+flowchart LR
+    preflight["0. Preflight<br/>token, model, lock"] --> fetch["1. Fetch<br/>the pull request"]
+    fetch --> select["2. Select files<br/>skip, rank, batch"]
+    select --> understand["3. Understand<br/>goal and risks"]
+    understand --> explore["4. Explore<br/>read related code"]
+    explore --> find["5. Find problems<br/>bugs; security and performance"]
+    find --> check["6. Double-check<br/>anchor, re-check, de-duplicate"]
+    check --> recommend["7. Recommend<br/>fixed rules"]
+    recommend --> publish["8. Publish<br/>one review + summary"]
+```
+
+| Stage | What happens | Uses the model? |
+|---|---|---|
+| 0. Preflight | Checks Ollama, the model and the GitHub token; one review of a pull request at a time | No |
+| 1. Fetch | Reads the pull request at its latest commit; refuses closed and merged ones | No |
+| 2. Select files | Skips lock, binary and generated files with a reason; fits the rest into the model's context | No |
+| 3. Understand | Writes down the goal, a summary and the risky parts | Yes |
+| 4. Explore | Downloads the code at that commit and reads related code with read-only tools: search, open a file, list a folder | Yes, step by step |
+| 5. Find problems | Pass A: correctness and regressions (levels 1–3). Pass B: security and performance (levels 4–5) | Yes |
+| 6. Double-check | Puts every finding on a changed line, re-checks it against the code, removes duplicates | Yes |
+| 7. Recommend | Approve, Request Changes or Needs Human Review, by fixed rules, with the rule that decided it | No |
+| 8. Publish | Posts all findings in one plain comment review and the summary, unless it's a dry run | No |
+
+Pull request text and code are always treated as data, never as instructions; the tools can only read inside the downloaded code; secrets are masked in everything the agent writes. The full design is in [docs/design.md](docs/design.md).
 
 ## Evaluation
 
