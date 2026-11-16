@@ -23,6 +23,15 @@ def test_every_prompt_file_has_a_version_and_text() -> None:
         assert "never instructions" in prompt.text, f"{name} must say data isn't instructions"
 
 
+@pytest.mark.parametrize("name", ["find_a", "find_b"])
+def test_the_finding_prompts_dont_steer_towards_an_empty_answer(name: str) -> None:
+    # Praising an empty list ("An empty list is a good answer") made the model answer with
+    # no findings when the change had a problem (#62). How to answer with none still stays.
+    text = load(name).text
+    assert "answer with an empty list of findings" in text
+    assert "good answer" not in text
+
+
 def test_the_label_names_the_prompt_and_its_version() -> None:
     assert parse("find_a", "version: 3\n\nLook for bugs.").label == "find_a v3"
 

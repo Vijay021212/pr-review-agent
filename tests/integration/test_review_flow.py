@@ -160,7 +160,7 @@ def test_the_command_line_prints_the_whole_review(
     assert "#### `src/cart.py` line 3" in out
     assert "- **What happens now:** ZeroDivisionError, and the checkout page fails." in out
     assert "- **Reviewed (1 file):** `src/cart.py`" in out
-    assert "prompts: understand v1, explore v2, find_a v1, find_b v1" in out
+    assert "prompts: understand v1, explore v2, find_a v2, find_b v2" in out
     # Progress went to the error stream, so the review itself can be saved cleanly.
     assert "Reading pull request octo/shop#7..." in captured.err
 
