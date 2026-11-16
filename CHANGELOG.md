@@ -9,6 +9,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 - The offline evaluation: `pr-review-agent eval eval/cases` reviews every test pull request, stored as folders, with the real agent and without GitHub, and writes a report of every measure per review level (held-out cases separately, average, lowest and highest over repeat runs), a review sheet of every finding, and the raw results ([#21](https://github.com/Vijay021212/pr-review-agent/issues/21)).
 - The evaluation cases in `eval/cases`: 33 small test pull requests, with 25 planted problems (5 per review level), 5 clean changes and 3 prompt-injection attempts, 12 of them held out from tuning; a test keeps the set at its minimum size and every planted problem on a changed line ([#22](https://github.com/Vijay021212/pr-review-agent/issues/22)).
 
+### Fixed
+
+- A file the pull request changes is no longer shown to the finding passes a second time as unchanged related code when exploring opened it; the model read its new lines as old ones and missed the problems in them ([#60](https://github.com/Vijay021212/pr-review-agent/issues/60)).
+
 ## [0.2.0] - 2026-11-13
 
 The agent explores related code on its own, double-checks its findings, looks for security and performance problems, and posts the review on GitHub.
