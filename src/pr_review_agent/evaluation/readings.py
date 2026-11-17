@@ -11,9 +11,10 @@ which; a person reads the finding and records the verdict with the reason:
       reason: Describes the new negative-price check, not the cache that's no longer cleared.
 
 A finding is known by its fingerprint: a short hash of its place and text. At temperature
-0 the model answers the same way every time, so a finding that comes back unchanged in a
-later evaluation keeps its reading, and only new findings need reading. A finding whose
-text changed in any way is a new finding.
+0 the model nearly always answers the same way, so most findings come back unchanged in a
+later evaluation and keep their reading; only new findings need reading. A finding whose
+text changed in any way is a new finding. ("Nearly": when two answers are almost equally
+likely, tiny numeric differences between runs can tip the model to the other one.)
 """
 
 from __future__ import annotations
