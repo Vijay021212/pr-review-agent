@@ -1,0 +1,13 @@
+title: Keep order totals in cents
+description: Order totals are now kept as whole cents, so adding them up never gives rounding errors.
+kind: planted
+recommendation: Request Changes
+held_out: true
+problems:
+- file: orders.py
+  marker: '"total_cents": round(total * 100)'
+  lines: 1
+  level: 3
+  category: bug
+  what: The key is now total_cents, but receipt.receipt_line() still reads order['total'], so every receipt
+    raises KeyError.

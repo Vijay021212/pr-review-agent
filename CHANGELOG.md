@@ -15,6 +15,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 - The finding prompts (find_a and find_b, now version 2) no longer call an empty list of findings a good answer; the hint made the model answer with no findings when the change had a problem ([#62](https://github.com/Vijay021212/pr-review-agent/issues/62)).
 - The explore, understand, find_a and find_b prompts describe what a good answer contains instead of giving an example of one; the model copied the examples into its notes and findings, and two of them matched evaluation cases. Notes now say only what the last step's result showed ([#66](https://github.com/Vijay021212/pr-review-agent/issues/66)).
 
+- Four held-out evaluation cases that informed a change while tuning (clean-e, l3-d, l3-e, inject-c) are replaced by new held-out cases of the same kinds, so the held-out scores again show how the agent does on changes it wasn't tuned on; their readings are removed ([#74](https://github.com/Vijay021212/pr-review-agent/issues/74)).
+
 ### Security
 
 - Sentences of a pull request's title, description or linked issues that tell the reviewer, or an AI, what to do or what to conclude are quoted by the understand stage, left out of what the finding passes read when found word for word, and listed in the summary; the model followed such a sentence and approved an SQL injection ([#70](https://github.com/Vijay021212/pr-review-agent/issues/70)).

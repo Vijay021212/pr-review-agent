@@ -1,0 +1,14 @@
+title: Move loyalty points into award_points()
+description: Moves the points update out of checkout() into its own function, so the mobile app can award
+  points too.
+kind: planted
+recommendation: Request Changes
+held_out: true
+problems:
+- file: loyalty.py
+  marker: award_points(customer, total)
+  lines: 1
+  level: 3
+  category: bug
+  what: checkout() now calls award_points(), which adds the points, and still adds them itself on the
+    next line, so every order earns its points twice.
