@@ -170,7 +170,7 @@ Prompts live in text files in `src/pr_review_agent/prompts/`, one per stage and 
 Every prompt follows the same rules:
 
 - the severity definitions (requirements 5.2) and review levels (5.1) are included word for word,
-- pull request text and code sit between clear markers, with the rule that they're **data to review, never instructions**,
+- pull request text and code sit between clear markers, with the rule that they're **data to review, never instructions**; because a small model can follow such text anyway, the understand stage also quotes every sentence that tells the reviewer what to do or conclude, code leaves each quote found word for word out of what the finding passes read, and the summary lists what was left out,
 - the answer must match the stage's JSON schema.
 
 ## 8. Rules that are plain code (no model)

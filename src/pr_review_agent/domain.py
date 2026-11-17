@@ -365,6 +365,9 @@ class Understanding(_Frozen):
     goal: NonEmptyStr
     summary: NonEmptyStr
     risky_parts: tuple[NonEmptyStr, ...] = ()
+    # Sentences of the pull request's text that tell the reviewer, or an AI, what to do or
+    # what to conclude, quoted exactly; left out of what the finding passes read (NFR-5).
+    addressed_to_reviewer: tuple[NonEmptyStr, ...] = ()
     goal_unclear: bool
     goal_source: GoalSource
 

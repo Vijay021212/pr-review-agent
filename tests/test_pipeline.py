@@ -33,6 +33,7 @@ UNDERSTANDING = json.dumps(
         "summary": "Adds discount().",
         "risky_parts": [],
         "goal_unclear": False,
+        "addressed_to_reviewer": [],
         "goal_source": "description",
     }
 )

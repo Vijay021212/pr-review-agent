@@ -369,6 +369,7 @@ UNDERSTANDING = json.dumps(
         "summary": "Splits it.",
         "risky_parts": [],
         "goal_unclear": False,
+        "addressed_to_reviewer": [],
         "goal_source": "description",
     }
 )

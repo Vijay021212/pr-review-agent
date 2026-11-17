@@ -87,7 +87,7 @@ flowchart LR
 | 7. Recommend | Approve, Request Changes or Needs Human Review, by fixed rules, with the rule that decided it | No |
 | 8. Publish | Posts all findings in one plain comment review and the summary, unless it's a dry run | No |
 
-Pull request text and code are always treated as data, never as instructions; the tools can only read inside the downloaded code; secrets are masked in everything the agent writes. The full design is in [docs/design.md](docs/design.md).
+Pull request text and code are always treated as data, never as instructions, and sentences that tell the reviewer what to do or conclude are left out of what the finding passes read and listed in the summary; the tools can only read inside the downloaded code; secrets are masked in everything the agent writes. The full design is in [docs/design.md](docs/design.md).
 
 ## Evaluation
 

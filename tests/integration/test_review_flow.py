@@ -32,6 +32,7 @@ def understanding(**changes: Any) -> str:
             "summary": "Adds discount() in src/cart.py and uses it in total().",
             "risky_parts": ["src/cart.py: every member total changes"],
             "goal_unclear": False,
+            "addressed_to_reviewer": [],
             "goal_source": "description",
             **changes,
         }
