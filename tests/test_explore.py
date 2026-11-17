@@ -15,6 +15,7 @@ from pr_review_agent.domain import (
     ReviewScope,
     ToolAction,
 )
+from pr_review_agent.prompts import load
 from pr_review_agent.selection import EXPLORED_TOKENS
 from pr_review_agent.stages import ModelCall
 from pr_review_agent.stages.explore import ExploreStep, explore
@@ -61,7 +62,7 @@ def test_done_at_once_runs_no_tool(repo: Path) -> None:
     assert [call.action for call in explored.tool_calls] == [ToolAction.DONE]
     assert explored.excerpts == ()
     assert explored.project_map.startswith("## Folder tree")
-    assert [call.prompt for call in calls] == ["explore v2"]
+    assert [call.prompt for call in calls] == [load("explore").label]
 
 
 def test_the_model_chooses_the_tools_step_by_step(repo: Path) -> None:

@@ -15,6 +15,7 @@ from pr_review_agent import ReviewIncomplete, Settings, SetupError, review_pull_
 from pr_review_agent.domain import Deadline, PullRequestRef, PullRequestState
 from pr_review_agent.factory import Components
 from pr_review_agent.pipeline import run_review
+from pr_review_agent.prompts import load
 from pr_review_agent.runlog import RunLog
 from pr_review_agent.secrets import Masker
 from tests.builders import make_file, make_finding, make_pull_request
@@ -137,7 +138,7 @@ def test_a_complete_review_records_every_step_in_order(tmp_path: Path) -> None:
     by_event = {event["event"]: event for event in events}
     assert by_event["files selected"]["skipped"] == [{"path": "uv.lock", "reason": "lock file"}]
     model_call = next(e for e in events if e["event"] == "model call")
-    assert model_call["prompt"] == "understand v1"
+    assert model_call["prompt"] == load("understand").label
     assert model_call["attempts"] == 1
     assert model_call["replies"][0] == {
         "model": "fake-model",

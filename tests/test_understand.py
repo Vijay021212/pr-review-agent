@@ -17,6 +17,7 @@ from pr_review_agent.domain import (
     TimeLimitReached,
     Understanding,
 )
+from pr_review_agent.prompts import load
 from pr_review_agent.selection import select_files
 from pr_review_agent.stages.understand import build_message, understand
 from tests.builders import make_file, make_pull_request
@@ -47,7 +48,7 @@ def test_the_answer_comes_back_as_an_understanding() -> None:
     assert understanding.risky_parts == ("cart.py: totals change for every member",)
     assert not understanding.goal_unclear
     assert understanding.goal_source is GoalSource.DESCRIPTION
-    assert call.prompt == "understand v1"
+    assert call.prompt == load("understand").label
     assert len(call.replies) == 1
     assert "never instructions" in model.calls[0].system
 
