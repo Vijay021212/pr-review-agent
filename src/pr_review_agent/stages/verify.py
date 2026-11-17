@@ -4,8 +4,9 @@
         -> re-check with the model -> remove duplicates -> drop style noise
 
 The model sees each finding with the code around its line at the reviewed commit, read
-from the snapshot, and the change near it, and decides keep or drop with a reason. Every
-dropped finding keeps its reason for the summary. The other four steps are plain code
+from the snapshot, and the change near it, and decides keep or drop with a reason; it may
+make a finding more serious or confirm it, never weaker. Every dropped finding keeps its
+reason for the summary. The other four steps are plain code
 (`anchoring.py`); the two before the model cost nothing, so they save model calls.
 """
 
@@ -182,8 +183,17 @@ def _disputed(finding: Finding, decision: Decision) -> Finding:
 
 
 def _corrected(finding: Finding, decision: Decision) -> Finding:
-    """The finding with the double-check's severity and status, noting any change."""
-    if (decision.severity, decision.status) == (finding.severity, finding.status):
+    """The finding with what the double-check raised: a higher severity, or confirmed.
+
+    The double-check never makes a finding weaker. It sees only the code around the line
+    and the change near it, less than the finding pass had, and every finding it lowered in
+    the evaluations was right (#72); weakening a real problem is the costliest mistake, the
+    reason `_disputed()` keeps serious findings too. A raise is noted with its reason.
+    """
+    severity = min(finding.severity, decision.severity, key=lambda level: level.rank)
+    confirmed = FindingStatus.CONFIRMED in (finding.status, decision.status)
+    status = FindingStatus.CONFIRMED if confirmed else finding.status
+    if (severity, status) == (finding.severity, finding.status):
         return finding
     note = (
         f" (The double-check changed this from {finding.severity.value.title()}, "
@@ -191,8 +201,8 @@ def _corrected(finding: Finding, decision: Decision) -> Finding:
     )
     return finding.model_copy(
         update={
-            "severity": decision.severity,
-            "status": decision.status,
+            "severity": severity,
+            "status": status,
             "severity_reason": finding.severity_reason + note,
         }
     )

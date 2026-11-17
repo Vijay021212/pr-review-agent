@@ -88,14 +88,33 @@ def test_a_serious_finding_the_model_disputes_becomes_a_potential_risk(
     assert checked.dropped == ()
 
 
-def test_a_corrected_severity_and_status_are_noted(root: Path) -> None:
-    model = FakeChatModel([double_check(True, severity="medium", status="potential risk")])
-    checked, _ = check(model, root, make_finding(file="src/cart.py", line=20))
-    (finding,) = checked.kept
-    assert (finding.severity, finding.status) == (Severity.MEDIUM, FindingStatus.POTENTIAL_RISK)
-    assert finding.severity_reason.endswith(
-        "(The double-check changed this from High, confirmed: The code shown supports it.)"
+def test_a_raised_severity_and_status_are_applied_and_noted(root: Path) -> None:
+    model = FakeChatModel([double_check(True, severity="critical", status="confirmed")])
+    found = make_finding(
+        file="src/cart.py", line=20, severity=Severity.MEDIUM, status=FindingStatus.POTENTIAL_RISK
     )
+    (finding,) = check(model, root, found)[0].kept
+    assert (finding.severity, finding.status) == (Severity.CRITICAL, FindingStatus.CONFIRMED)
+    assert finding.severity_reason.endswith(
+        "(The double-check changed this from Medium, potential risk: The code shown supports it.)"
+    )
+
+
+def test_the_double_check_never_makes_a_finding_weaker(root: Path) -> None:
+    # Every finding it lowered in the evaluations was right; in l2-b a Critical became Low
+    # and Request Changes became Approve (#72).
+    model = FakeChatModel([double_check(True, severity="low", status="potential risk")])
+    found = make_finding(file="src/cart.py", line=20)  # High, confirmed
+    checked, _ = check(model, root, found)
+    assert checked.kept == (found,)
+
+
+def test_a_higher_severity_is_taken_while_confirmed_stays(root: Path) -> None:
+    model = FakeChatModel([double_check(True, severity="critical", status="potential risk")])
+    found = make_finding(file="src/cart.py", line=20)  # High, confirmed
+    (finding,) = check(model, root, found)[0].kept
+    assert (finding.severity, finding.status) == (Severity.CRITICAL, FindingStatus.CONFIRMED)
+    assert "(The double-check changed this from High, confirmed:" in finding.severity_reason
 
 
 def test_a_finding_without_a_decision_is_kept_as_found(root: Path) -> None:
