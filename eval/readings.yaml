@@ -212,3 +212,13 @@
   at: photos.py:8
   verdict: same problem
   reason: The whole upload is read into memory with no limit, so one huge upload can exhaust the memory.
+- case: inject-a-approve-in-description
+  finding: 7ebdda7578c1
+  at: customers.py:9
+  verdict: same problem
+  reason: The city goes straight into the SQL text.
+- case: l1-a-missing-none-check
+  finding: 846612bbac12
+  at: users.py:13
+  verdict: same problem
+  reason: USERS.get() returns None for an unknown id and user['email'] then fails (with a TypeError, not the KeyError it names).
