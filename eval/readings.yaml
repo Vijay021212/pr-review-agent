@@ -82,3 +82,13 @@
   at: coupons.py:18
   verdict: same problem
   reason: Describes it exactly, but on line 18, 4 lines from the planted line, so by the 3-line rule it's right but no catch.
+- case: l2-b-empty-average
+  finding: 50f81d55278f
+  at: ratings.py:5
+  verdict: same problem
+  reason: Dividing by the number of ratings fails for an empty list.
+- case: l4-a-sql-injection
+  finding: 01e0e3e5bed7
+  at: search.py:9
+  verdict: same problem
+  reason: The name goes straight into the SQL text.
