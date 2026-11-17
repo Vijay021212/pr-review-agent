@@ -53,6 +53,7 @@ The test script, the samples and every raw answer are in [`experiments/adr-001-m
 
 - **Explanations need checking.** Half the explanations had wrong details even when the line was right. This confirms that the double-check step (FR-10) is essential, and that the evaluation must check explanations, not only lines (requirements 7.1).
 - **Severity needs guarding.** The model called a pagination bug Critical. Severity rules (5.2) must be part of the instructions, and the double-check step should be able to correct severity.
+  *Update, 2026-11-17 ([#72](https://github.com/Vijay021212/pr-review-agent/issues/72)):* in the evaluations, every finding the double-check lowered was right (4 of 4), because it sees less than the finding pass. It may now raise a finding's severity, never lower it.
 - **Five tiny samples aren't proof.** The full evaluation (FR-18) will measure the model properly, including levels 3 to 5 on realistic code.
 
 ## Revisit when
