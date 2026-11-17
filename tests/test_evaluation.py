@@ -162,6 +162,26 @@ def test_load_cases_needs_a_folder_of_cases(tmp_path: Path, make: str) -> None:
         load_cases(folder)
 
 
+def test_python_cache_files_are_never_part_of_a_case(tmp_path: Path) -> None:
+    # Running a case's code to check it leaves these behind (#78).
+    folder = write_case(tmp_path / "cases", "c")
+    cache = folder / "head" / "src" / "__pycache__"
+    cache.mkdir()
+    (cache / "stats.cpython-312.pyc").write_bytes(b"\xcb\x0d\x0d\x0a binary")
+    case = load_case(folder)
+    assert [file.path for file in case.pull_request.files] == ["src/stats.py"]
+    root = FixtureGitHub(case).download_snapshot(case.pull_request, tmp_path / "s", Deadline(60))
+    assert not (root / "src" / "__pycache__").exists()
+
+
+def test_a_file_that_isnt_text_is_refused_with_its_name(tmp_path: Path) -> None:
+    folder = write_case(tmp_path / "cases", "c")
+    (folder / "head" / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n\xcb\xff")
+    with pytest.raises(SetupError, match=r"logo\.png isn't UTF-8 text") as caught:
+        load_case(folder)
+    assert caught.value.fix.startswith("Cases hold source files only")
+
+
 # --- The fixture -----------------------------------------------------------------------
 
 
