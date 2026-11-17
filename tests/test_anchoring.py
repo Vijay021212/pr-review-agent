@@ -1,10 +1,17 @@
-"""Tests for the plain-code rules of the double-check: anchoring, duplicates, style noise."""
+"""Tests for the plain-code rules of the double-check: anchoring, findings that describe no
+failure, duplicates, style noise."""
 
 from __future__ import annotations
 
 import pytest
 
-from pr_review_agent.anchoring import anchor, anchor_all, drop_style_noise, remove_duplicates
+from pr_review_agent.anchoring import (
+    anchor,
+    anchor_all,
+    drop_no_failure,
+    drop_style_noise,
+    remove_duplicates,
+)
 from pr_review_agent.domain import (
     Category,
     ChangedFile,
@@ -172,3 +179,53 @@ def test_low_severity_maintainability_suggestions_are_dropped() -> None:
     result = drop_style_noise((style, low_bug, medium_quality))
     assert result.kept == (low_bug, medium_quality)
     assert result.dropped[0].reason == "a Low-severity style or maintainability suggestion"
+
+
+# --- Findings that describe no failure (#68) ----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("now", "expected"),
+    [
+        # The same text, as the model wrote it in clean-e-named-constant.
+        ("Returns the correct number of pages.", "Returns the correct number of pages."),
+        # Only tense, mood and punctuation differ, as in l3-d-early-return.
+        (
+            "A receipt is sent for the order, but the card processor is not called.",
+            "A receipt should be sent for the order, and the card processor should not be called.",
+        ),
+        ("THE TOTAL IS 104.99", "the total will be 104.99"),
+    ],
+)
+def test_a_finding_whose_now_is_what_should_happen_is_dropped(now: str, expected: str) -> None:
+    finding = make_finding(current_behaviour=now, expected_behaviour=expected)
+    result = drop_no_failure((finding,))
+    assert result.kept == ()
+    (dropped,) = result.dropped
+    assert dropped.finding == finding
+    assert dropped.reason == "it describes no failure: what happens now is what should happen"
+
+
+@pytest.mark.parametrize(
+    ("now", "expected"),
+    [
+        ("ships_free(50) returns False", "ships_free(50) should return True"),
+        # A negation always counts, and so does a contracted one.
+        ("The coupon is not marked as used.", "The coupon should be marked as used."),
+        ("The coupon isn't marked as used.", "The coupon is marked as used."),
+        ("Returns orders from index 20.", "Returns orders from index 0."),
+        # Nothing left once tense and mood are left out: no evidence of sameness.
+        ("Is.", "Should be."),
+    ],
+)
+def test_a_finding_with_a_real_difference_is_kept(now: str, expected: str) -> None:
+    finding = make_finding(current_behaviour=now, expected_behaviour=expected)
+    assert drop_no_failure((finding,)).kept == (finding,)
+
+
+def test_only_bug_type_findings_are_judged_by_their_behaviour() -> None:
+    same = "The helper is copied."
+    finding = make_finding(
+        category=Category.CODE_QUALITY, current_behaviour=same, expected_behaviour=same
+    )
+    assert drop_no_failure((finding,)).kept == (finding,)

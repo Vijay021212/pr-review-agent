@@ -17,6 +17,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- A finding whose "what happens now" is what should happen describes no failure, and is dropped with that reason before the model's double-check; the model had reported such findings, like "This change is correct", and they were posted ([#68](https://github.com/Vijay021212/pr-review-agent/issues/68)).
 - A file the pull request changes is no longer shown to the finding passes a second time as unchanged related code when exploring opened it; the model read its new lines as old ones and missed the problems in them ([#60](https://github.com/Vijay021212/pr-review-agent/issues/60)).
 
 ## [0.2.0] - 2026-11-13

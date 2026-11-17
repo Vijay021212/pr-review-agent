@@ -1,11 +1,12 @@
 """Stage 6, double-check: re-check every finding before it's posted (FR-10, FR-21).
 
-    anchor on a changed line -> re-check with the model -> remove duplicates -> drop style noise
+    anchor on a changed line -> drop findings that describe no failure
+        -> re-check with the model -> remove duplicates -> drop style noise
 
 The model sees each finding with the code around its line at the reviewed commit, read
 from the snapshot, and the change near it, and decides keep or drop with a reason. Every
-dropped finding keeps its reason for the summary. The other three steps are plain code
-(`anchoring.py`).
+dropped finding keeps its reason for the summary. The other four steps are plain code
+(`anchoring.py`); the two before the model cost nothing, so they save model calls.
 """
 
 from __future__ import annotations
@@ -14,7 +15,12 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from pr_review_agent.anchoring import anchor_all, drop_style_noise, remove_duplicates
+from pr_review_agent.anchoring import (
+    anchor_all,
+    drop_no_failure,
+    drop_style_noise,
+    remove_duplicates,
+)
 from pr_review_agent.diff_text import render_file
 from pr_review_agent.domain import (
     ChangedFile,
@@ -63,13 +69,14 @@ def verify(
 ) -> tuple[CheckedFindings, tuple[ModelCall, ...]]:
     """`dropped_before` holds findings an earlier stage already dropped, with their reasons."""
     anchored = anchor_all(findings, files)
+    failures = drop_no_failure(anchored.kept)
     by_path = {file.path: file for file in files}
     prompt = load("verify")
     kept: list[Finding] = []
-    dropped: list[DroppedFinding] = [*dropped_before, *anchored.dropped]
+    dropped: list[DroppedFinding] = [*dropped_before, *anchored.dropped, *failures.dropped]
     calls: list[ModelCall] = []
-    for start in range(0, len(anchored.kept), FINDINGS_PER_CALL):
-        group = anchored.kept[start : start + FINDINGS_PER_CALL]
+    for start in range(0, len(failures.kept), FINDINGS_PER_CALL):
+        group = failures.kept[start : start + FINDINGS_PER_CALL]
         deadline.check("the double-check")
         answer, call = ask(
             model, prompt, build_message(group, by_path, root), VerifyAnswer, deadline
