@@ -1,6 +1,6 @@
 """Runs the review stages in a fixed order (design section 2, ADR-002).
 
-    preflight -> fetch -> select files -> understand -> snapshot -> explore -> find (A, B)
+    preflight -> fetch -> select files -> understand -> screen -> snapshot -> explore -> find (A, B)
     -> double-check -> recommend -> publish (unless it is a dry run)
 
 **Failure rule (NFR-4):** if any stage fails, or the hard time limit is reached, the
@@ -45,6 +45,7 @@ from pr_review_agent.stages.fetch import fetch
 from pr_review_agent.stages.find import PASSES, find_problems
 from pr_review_agent.stages.preflight import preflight
 from pr_review_agent.stages.publish import publish
+from pr_review_agent.stages.screen import screen
 from pr_review_agent.stages.understand import understand
 from pr_review_agent.stages.verify import verify
 from pr_review_agent.version import __version__
@@ -154,6 +155,13 @@ def _run_stages(
         understanding, call = understand(pull_request, scope, model, deadline)
         _record_calls(run_log, "understand", [call])
         calls.append(call)
+    with stages.run("screen", "Looking for text that tells the reviewer what to do"):
+        passages, call = screen(pull_request, model, deadline)
+        _record_calls(run_log, "screen", [call])
+        calls.append(call)
+        if passages:
+            run_log.record("left out of the review", passages=list(passages))
+        understanding = understanding.model_copy(update={"addressed_to_reviewer": passages})
     # The snapshot stays until the review ends, and is removed even when a stage fails.
     with ExitStack() as cleanup:
         with stages.run("snapshot", "Downloading the repository at the reviewed commit"):

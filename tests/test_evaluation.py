@@ -36,7 +36,7 @@ from pr_review_agent.evaluation.runner import run_evaluation
 from pr_review_agent.evaluation.scoring import CaseRun, match_findings, score, summarize
 from pr_review_agent.sensitive import find_sensitive
 from tests.builders import make_finding, make_result
-from tests.fakes import EXPLORE_DONE, KEEP_ONE, FakeChatModel
+from tests.fakes import EXPLORE_DONE, KEEP_ONE, NOTHING_TO_SCREEN, FakeChatModel
 
 BASE = {"src/stats.py": "def average(xs):\n    return sum(xs) / len(xs)\n"}
 HEAD = {
@@ -389,7 +389,6 @@ UNDERSTANDING = json.dumps(
         "summary": "Splits it.",
         "risky_parts": [],
         "goal_unclear": False,
-        "addressed_to_reviewer": [],
         "goal_source": "description",
     }
 )
@@ -404,7 +403,14 @@ def test_the_real_pipeline_reviews_each_case_offline(tmp_path: Path) -> None:
     write_case(tmp_path / "cases", "c")
     cases = load_cases(tmp_path / "cases")
     model = FakeChatModel(
-        [UNDERSTANDING, EXPLORE_DONE, bug_answer(4), '{"findings": []}', KEEP_ONE]
+        [
+            UNDERSTANDING,
+            NOTHING_TO_SCREEN,
+            EXPLORE_DONE,
+            bug_answer(4),
+            '{"findings": []}',
+            KEEP_ONE,
+        ]
     )
     (run,) = run_evaluation(cases, model, Settings(), runs=1, clock=iter([0.0, 90.0]).__next__)
     assert run.result is not None
@@ -422,6 +428,7 @@ def test_an_incomplete_review_is_recorded_and_the_evaluation_goes_on(tmp_path: P
             "not json",
             "still not json",
             UNDERSTANDING,
+            NOTHING_TO_SCREEN,
             EXPLORE_DONE,
             '{"findings": []}',
             '{"findings": []}',
@@ -439,7 +446,14 @@ def test_the_eval_command_writes_the_report_sheet_and_results(
 ) -> None:
     write_case(tmp_path / "cases", "c")
     model = FakeChatModel(
-        [UNDERSTANDING, EXPLORE_DONE, bug_answer(4), '{"findings": []}', KEEP_ONE]
+        [
+            UNDERSTANDING,
+            NOTHING_TO_SCREEN,
+            EXPLORE_DONE,
+            bug_answer(4),
+            '{"findings": []}',
+            KEEP_ONE,
+        ]
     )
     monkeypatch.setattr("pr_review_agent.factory.build_model", lambda settings: model)
     out = tmp_path / "out"
@@ -457,7 +471,9 @@ def test_the_eval_command_names_its_default_folder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     write_case(tmp_path / "cases", "c")
-    model = FakeChatModel([UNDERSTANDING, EXPLORE_DONE, '{"findings": []}', '{"findings": []}'])
+    model = FakeChatModel(
+        [UNDERSTANDING, NOTHING_TO_SCREEN, EXPLORE_DONE, '{"findings": []}', '{"findings": []}']
+    )
     monkeypatch.setattr("pr_review_agent.factory.build_model", lambda settings: model)
     monkeypatch.chdir(tmp_path)
     assert cli.main(["eval", "cases"]) == 0
@@ -508,7 +524,13 @@ def test_the_eval_command_runs_every_case_as_often_as_asked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     write_case(tmp_path / "cases", "c")
-    replies = [UNDERSTANDING, EXPLORE_DONE, '{"findings": []}', '{"findings": []}'] * 2
+    replies = [
+        UNDERSTANDING,
+        NOTHING_TO_SCREEN,
+        EXPLORE_DONE,
+        '{"findings": []}',
+        '{"findings": []}',
+    ] * 2
     monkeypatch.setattr("pr_review_agent.factory.build_model", lambda s: FakeChatModel(replies))
     out = tmp_path / "out"
     assert cli.main(["eval", str(tmp_path / "cases"), "--runs", "2", "--out", str(out)]) == 0

@@ -9,7 +9,11 @@ from pydantic import BaseModel
 from pr_review_agent.diff_text import render_file
 from pr_review_agent.domain import ChatModel, Deadline, ModelReply, PullRequest, ReviewScope
 from pr_review_agent.models.structured import ask_structured
-from pr_review_agent.prompts import Prompt
+from pr_review_agent.prompts import Prompt, clip, data_block
+
+# How much of a pull request's own text the understand and screen stages read.
+DESCRIPTION_CHARS = 4000
+ISSUE_CHARS = 1500
 
 
 @dataclass(frozen=True)
@@ -29,6 +33,20 @@ def ask[T: BaseModel](
         model, system=prompt.text, user=user, answer_type=answer_type, deadline=deadline
     )
     return answer.value, ModelCall(prompt.label, answer.replies, answer.retry_reason)
+
+
+def pull_request_text(pull_request: PullRequest) -> list[str]:
+    """The pull request's own text, each part between data markers: its title, its
+    description and its linked issues, as the understand and screen stages read them."""
+    parts = [
+        "## Pull request",
+        data_block("TITLE", pull_request.title),
+        data_block("DESCRIPTION", clip(pull_request.description, DESCRIPTION_CHARS) or "(empty)"),
+    ]
+    for issue in pull_request.linked_issues:
+        text = f"{issue.title}\n\n{clip(issue.body, ISSUE_CHARS)}".strip()
+        parts.append(data_block(f"LINKED ISSUE #{issue.number}", text))
+    return parts
 
 
 def changed_files_list(pull_request: PullRequest, scope: ReviewScope) -> str:

@@ -11,7 +11,7 @@ from pr_review_agent import Settings, SetupError, review_pull_request
 from pr_review_agent.factory import Components
 from pr_review_agent.secrets import Masker
 from tests.builders import make_pull_request
-from tests.fakes import EXPLORE_DONE, FakeChatModel, FakeGitHub
+from tests.fakes import EXPLORE_DONE, NOTHING_TO_SCREEN, FakeChatModel, FakeGitHub
 
 LINK = "https://github.com/octo/shop/pull/7"
 REPLIES = [
@@ -21,10 +21,10 @@ REPLIES = [
             "summary": "Adds discount().",
             "risky_parts": [],
             "goal_unclear": False,
-            "addressed_to_reviewer": [],
             "goal_source": "description",
         }
     ),
+    NOTHING_TO_SCREEN,
     EXPLORE_DONE,
     json.dumps({"findings": []}),
     json.dumps({"findings": []}),

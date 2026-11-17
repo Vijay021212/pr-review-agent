@@ -127,6 +127,15 @@ class PostedReview:
     comments: tuple[ReviewComment, ...]
 
 
+def screen_answer(*quotes: str) -> str:
+    """The screen stage's answer: the sentences that tell the reviewer what to do."""
+    return json.dumps({"addressed_to_reviewer": list(quotes)})
+
+
+NOTHING_TO_SCREEN = screen_answer()
+"""The screen stage's answer when the pull request's text gives the reviewer no orders."""
+
+
 def explore_step(action: str, **fields: Any) -> str:
     """One answer of the explore stage, with every field it requires."""
     answer = {"action": action, "path": "", "text": "", "start_line": 1, "notes": ""}
