@@ -1,9 +1,10 @@
 """Scores, following requirements section 7 and the matching rule of 7.1.
 
-A finding catches a planted problem when it's in the same file and within 3 lines of the
-problem's lines (or inside them). Whether it describes the same problem is decided by a
-person reading the review sheet; the automatic score counts the location only and says so.
-A finding that matches no planted problem counts as a false alarm until a person reads it.
+A finding catches a planted problem when it's in the same file, within 3 lines of the
+problem's lines (or inside them), and describes the same problem. The location is checked
+here; whether it's the same problem is read by a person and recorded (`readings.py`). Until
+a finding is read, its location decides: near a planted problem it counts as a catch,
+anywhere else as a false alarm. The scores say how many findings that applies to.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from statistics import mean
 
 from pr_review_agent.domain import Finding, RecommendationValue, ReviewLevel, ReviewResult
 from pr_review_agent.evaluation.cases import Case, CaseKind, Located
+from pr_review_agent.evaluation.readings import NO_READINGS, Reading, Readings, Verdict
 
 MATCH_DISTANCE = 3
 # Speed targets of requirements 7 / NFR-3: (up to this many changed lines, minutes).
@@ -44,29 +46,47 @@ class CaseRun:
 
 @dataclass(frozen=True)
 class Match:
-    """A finding, and the planted problem it catches, if any."""
+    """A finding, the planted problem it's near, if any, and its reading, if it's been read."""
 
     finding: Finding
     problem: Located | None
     exact: bool  # inside the problem's own lines, for line accuracy
+    reading: Reading | None = None
+
+    @property
+    def verdict(self) -> Verdict:
+        """The reading's verdict; until the finding is read, what its location suggests."""
+        if self.reading is not None:
+            return self.reading.verdict
+        return Verdict.SAME_PROBLEM if self.problem else Verdict.FALSE_ALARM
+
+    @property
+    def catches(self) -> bool:
+        """Near a planted problem and describing it. Read as the same problem but further
+        than 3 lines away, a finding is right but no catch (7.1)."""
+        return self.problem is not None and self.verdict is Verdict.SAME_PROBLEM
 
 
-def match_findings(case: Case, findings: tuple[Finding, ...]) -> list[Match]:
-    """Each finding catches at most one planted problem, and each problem one finding."""
+def match_findings(
+    case: Case, findings: tuple[Finding, ...], readings: Readings = NO_READINGS
+) -> list[Match]:
+    """Each finding is near at most one planted problem, and each problem near one finding."""
     remaining = list(case.problems)
     matches = []
     for finding in sorted(findings, key=lambda f: (f.file, f.line)):
+        reading = readings.of(case.name, finding)
         near = [
             p
             for p in remaining
             if p.problem.file == finding.file and _distance(p, finding.line) <= MATCH_DISTANCE
         ]
         if not near:
-            matches.append(Match(finding, None, exact=False))
+            matches.append(Match(finding, None, exact=False, reading=reading))
             continue
         problem = min(near, key=lambda p: _distance(p, finding.line))
         remaining.remove(problem)
-        matches.append(Match(finding, problem, exact=_distance(problem, finding.line) == 0))
+        exact = _distance(problem, finding.line) == 0
+        matches.append(Match(finding, problem, exact=exact, reading=reading))
     return matches
 
 
@@ -97,23 +117,25 @@ class Scores:
     minutes_per_pr: float | None
     slowest_minutes: float | None
     over_time_target: int
+    unread: int  # findings scored by their location because nobody has read them yet
 
 
-def score(runs: list[CaseRun]) -> Scores:
+def score(runs: list[CaseRun], readings: Readings = NO_READINGS) -> Scores:
     planted: dict[int, list[bool]] = {int(level): [] for level in ReviewLevel}
     found: dict[int, list[bool]] = {int(level): [] for level in ReviewLevel}
     exact: list[bool] = []
     false_alarms = 0
+    unread = 0
     for run in runs:
-        matches = match_findings(run.case, run.findings)
-        caught = {id(m.problem) for m in matches if m.problem is not None}
+        matches = match_findings(run.case, run.findings, readings)
+        caught = {id(m.problem) for m in matches if m.catches}
         for problem in run.case.problems:
             planted[int(problem.problem.level)].append(id(problem) in caught)
         for match in matches:
-            found[int(match.finding.level)].append(match.problem is not None)
-            if match.problem is None:
-                false_alarms += 1
-            else:
+            found[int(match.finding.level)].append(match.verdict.is_right)
+            false_alarms += match.verdict is Verdict.FALSE_ALARM
+            unread += match.reading is None
+            if match.catches:
                 exact.append(match.exact)
     all_planted = [hit for hits in planted.values() for hit in hits]
     all_found = [hit for hits in found.values() for hit in hits]
@@ -141,6 +163,7 @@ def score(runs: list[CaseRun]) -> Scores:
         minutes_per_pr=mean(minutes) if minutes else None,
         slowest_minutes=max(minutes) if minutes else None,
         over_time_target=sum(1 for run in runs if _over_time_target(run)),
+        unread=unread,
     )
 
 
@@ -187,7 +210,7 @@ class Summary:
 SUBSETS = ("all", "tuning", "held out")
 
 
-def summarize(case_runs: list[CaseRun], runs: int) -> Summary:
+def summarize(case_runs: list[CaseRun], runs: int, readings: Readings = NO_READINGS) -> Summary:
     summary = Summary(runs=runs)
     for subset in SUBSETS:
         chosen = [
@@ -197,6 +220,7 @@ def summarize(case_runs: list[CaseRun], runs: int) -> Summary:
         ]
         if chosen:
             summary.by_subset[subset] = [
-                score([run for run in chosen if run.run == number]) for number in range(1, runs + 1)
+                score([run for run in chosen if run.run == number], readings)
+                for number in range(1, runs + 1)
             ]
     return summary
