@@ -3,11 +3,13 @@
     anchor on a changed line -> drop findings that describe no failure
         -> re-check with the model -> remove duplicates -> drop style noise
 
-The model sees each finding with the code around its line at the reviewed commit, read
-from the snapshot, and the change near it, and decides keep or drop with a reason; it may
+The model gets the same context the finding passes had (what the pull request is for, its
+title and description, the notes from exploring, the related code; #84), then each finding
+with the code around its line at the reviewed commit, the change near it, and the code at
+the other places the finding says it affects. It decides keep or drop with a reason; it may
 make a finding more serious or confirm it, never weaker. Every dropped finding keeps its
-reason for the summary. The other four steps are plain code
-(`anchoring.py`); the two before the model cost nothing, so they save model calls.
+reason for the summary. The other four steps are plain code (`anchoring.py`); the two
+before the model cost nothing, so they save model calls.
 """
 
 from __future__ import annotations
@@ -29,18 +31,24 @@ from pr_review_agent.domain import (
     CheckedFindings,
     Deadline,
     DroppedFinding,
+    ExploredContext,
     Finding,
     FindingStatus,
     NonEmptyStr,
+    PullRequest,
     Severity,
     Side,
+    Understanding,
 )
 from pr_review_agent.prompts import data_block, leave_out, load
-from pr_review_agent.stages import ModelCall, ask
+from pr_review_agent.stages import ModelCall, ask, review_context
+from pr_review_agent.tools import ReadOnlyTools, ToolRefused, normalize_path
 
 FINDINGS_PER_CALL = 4
 CODE_LINES_AROUND = 15  # lines of the reviewed code shown before and after a finding's line
 DIFF_LINES_AROUND = 12  # lines of the diff shown around it
+PLACES_PER_FINDING = 2  # other places a finding names whose code is shown
+PLACE_LINES_AROUND = 6  # lines shown before and after each of them
 SERIOUS = (Severity.CRITICAL, Severity.HIGH)
 
 
@@ -63,18 +71,19 @@ class VerifyAnswer(BaseModel):
 def verify(
     findings: tuple[Finding, ...],
     dropped_before: tuple[DroppedFinding, ...],
-    files: tuple[ChangedFile, ...],
+    pull_request: PullRequest,
+    understanding: Understanding,
+    explored: ExploredContext,
     root: Path,
     model: ChatModel,
     deadline: Deadline,
-    *,
-    passages: tuple[str, ...] = (),
 ) -> tuple[CheckedFindings, tuple[ModelCall, ...]]:
-    """`dropped_before` holds findings an earlier stage already dropped, with their reasons;
-    `passages` is what the pull request tells the reviewer to do, left out of the code shown."""
-    anchored = anchor_all(findings, files)
+    """`dropped_before` holds findings an earlier stage already dropped, with their reasons."""
+    anchored = anchor_all(findings, pull_request.files)
     failures = drop_no_failure(anchored.kept)
-    by_path = {file.path: file for file in files}
+    context = review_context(pull_request, understanding, explored)
+    passages = understanding.addressed_to_reviewer
+    by_path = {file.path: file for file in pull_request.files}
     prompt = load("verify")
     kept: list[Finding] = []
     dropped: list[DroppedFinding] = [*dropped_before, *anchored.dropped, *failures.dropped]
@@ -82,9 +91,8 @@ def verify(
     for start in range(0, len(failures.kept), FINDINGS_PER_CALL):
         group = failures.kept[start : start + FINDINGS_PER_CALL]
         deadline.check("the double-check")
-        answer, call = ask(
-            model, prompt, build_message(group, by_path, root, passages), VerifyAnswer, deadline
-        )
+        message = build_message(group, context, by_path, root, passages)
+        answer, call = ask(model, prompt, message, VerifyAnswer, deadline)
         calls.append(call)
         decisions = {decision.number: decision for decision in answer.decisions}
         for number, finding in enumerate(group, start=1):
@@ -108,11 +116,13 @@ def verify(
 
 def build_message(
     group: tuple[Finding, ...],
+    context: list[str],
     files: dict[str, ChangedFile],
     root: Path,
     passages: tuple[str, ...] = (),
 ) -> str:
-    parts = []
+    """The context the finding passes had, then each finding with the code it's about."""
+    parts = [*context, "## The findings to check"]
     for number, finding in enumerate(group, start=1):
         text = "\n".join(
             [
@@ -145,8 +155,39 @@ def build_message(
                 "The change near it:",
                 data_block(f"DIFF {number}", leave_out(_diff_around(file, finding), passages)),
             ]
+        for place, code in _places(root, finding):
+            parts += [
+                f"Code at {place}, which the finding says it affects:",
+                data_block(f"PLACE {number}", leave_out(code, passages)),
+            ]
     parts.append(f"Give a decision for each of the {len(group)} findings above.")
     return "\n\n".join(parts)
+
+
+def _places(root: Path, finding: Finding) -> list[tuple[str, str]]:
+    """The code around the other places a finding names ("path:line"), for the first few.
+
+    The places are the model's words, so they're read through the read-only tools: a place
+    outside the repository, through a link, or that isn't a text file is refused and left
+    out. A place already inside the code shown around the finding's line is left out too.
+    """
+    tools = ReadOnlyTools(root)
+    shown = []
+    for place in finding.affected_places[:PLACES_PER_FINDING]:
+        path, _, number = place.rpartition(":")
+        if not (path and number.isdigit()):
+            path, number = place, "1"
+        line = int(number)
+        same_file = normalize_path(path) == normalize_path(finding.file)
+        if same_file and abs(line - finding.line) <= CODE_LINES_AROUND:
+            continue
+        try:
+            opened = tools.open_file(path, max(1, line - PLACE_LINES_AROUND))
+        except ToolRefused:
+            continue
+        lines = opened.output.splitlines()[: 2 * PLACE_LINES_AROUND + 1]
+        shown.append((place, "\n".join(lines)))
+    return shown
 
 
 def _code_around(root: Path, finding: Finding) -> str:

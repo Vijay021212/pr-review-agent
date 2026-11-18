@@ -7,13 +7,23 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from pr_review_agent.diff_text import render_file
-from pr_review_agent.domain import ChatModel, Deadline, ModelReply, PullRequest, ReviewScope
+from pr_review_agent.domain import (
+    ChatModel,
+    Deadline,
+    ExploredContext,
+    ModelReply,
+    PullRequest,
+    ReviewScope,
+    Understanding,
+)
 from pr_review_agent.models.structured import ask_structured
-from pr_review_agent.prompts import Prompt, clip, data_block
+from pr_review_agent.prompts import Prompt, clip, data_block, leave_out
 
 # How much of a pull request's own text the understand and screen stages read.
 DESCRIPTION_CHARS = 4000
 ISSUE_CHARS = 1500
+# How much of its description the finding passes and the double-check read.
+REVIEW_DESCRIPTION_CHARS = 1500
 
 
 @dataclass(frozen=True)
@@ -46,6 +56,42 @@ def pull_request_text(pull_request: PullRequest) -> list[str]:
     for issue in pull_request.linked_issues:
         text = f"{issue.title}\n\n{clip(issue.body, ISSUE_CHARS)}".strip()
         parts.append(data_block(f"LINKED ISSUE #{issue.number}", text))
+    return parts
+
+
+def review_context(
+    pull_request: PullRequest, understanding: Understanding, explored: ExploredContext
+) -> list[str]:
+    """What the finding passes and the double-check both know about the pull request.
+
+    Its goal and summary, its title and description, the notes from exploring and the
+    related code exploring opened, each between data markers. What the pull request tells
+    the reviewer to do or conclude is left out (NFR-5), before clipping, so a passage can't
+    be cut in two. The double-check judges a finding with the same context the finding pass
+    had (#84).
+    """
+    risky = "\n".join(f"- {part}" for part in understanding.risky_parts) or "- (none named)"
+    passages = understanding.addressed_to_reviewer
+    description = clip(leave_out(pull_request.description, passages), REVIEW_DESCRIPTION_CHARS)
+    parts = [
+        "## What the pull request is for (written in an earlier step)",
+        data_block(
+            "UNDERSTANDING",
+            f"Goal: {understanding.goal}\nSummary: {understanding.summary}\nRisky parts:\n{risky}",
+        ),
+        "## Pull request",
+        data_block("TITLE", leave_out(pull_request.title, passages)),
+        data_block("DESCRIPTION", description or "(empty)"),
+    ]
+    if explored.notes:
+        notes = "\n".join(f"- {note}" for note in explored.notes)
+        parts += ["## Notes from exploring the repository", data_block("NOTES", notes)]
+    if explored.excerpts:
+        related = "\n\n".join(
+            f"### {excerpt.path} (from line {excerpt.start_line})\n{excerpt.text}"
+            for excerpt in explored.excerpts
+        )
+        parts += ["## Related code (unchanged, for context)", data_block("RELATED CODE", related)]
     return parts
 
 
