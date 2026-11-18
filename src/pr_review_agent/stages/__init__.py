@@ -69,15 +69,18 @@ def review_context(
     the reviewer to do or conclude is left out (NFR-5), before clipping, so a passage can't
     be cut in two. The double-check judges a finding with the same context the finding pass
     had (#84).
+
+    The understanding's risky parts aren't part of it: they're the model's guesses, written
+    before the review and never checked, and one wrong guess ("low <= high is not checked",
+    when it is) made the finding passes report it and the double-check confirm it on a
+    clean change (#88). They're for the person reading the summary.
     """
-    risky = "\n".join(f"- {part}" for part in understanding.risky_parts) or "- (none named)"
     passages = understanding.addressed_to_reviewer
     description = clip(leave_out(pull_request.description, passages), REVIEW_DESCRIPTION_CHARS)
     parts = [
         "## What the pull request is for (written in an earlier step)",
         data_block(
-            "UNDERSTANDING",
-            f"Goal: {understanding.goal}\nSummary: {understanding.summary}\nRisky parts:\n{risky}",
+            "UNDERSTANDING", f"Goal: {understanding.goal}\nSummary: {understanding.summary}"
         ),
         "## Pull request",
         data_block("TITLE", leave_out(pull_request.title, passages)),

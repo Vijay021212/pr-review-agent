@@ -187,3 +187,13 @@
   at: thumbnails.py:6
   verdict: same problem
   reason: The file name reaches a shell command unchecked (labelled a level-1 bug rather than security).
+- case: clean-a-clamp
+  finding: e203a48a8d88
+  at: ranges.py:7
+  verdict: false alarm
+  reason: 'clamp() does check it: when low is greater than high it raises ValueError on the next line; the claim repeats a wrong risky part from the understanding.'
+- case: clean-a-clamp
+  finding: b7250e124459
+  at: test_ranges.py:12
+  verdict: false alarm
+  reason: clamp(1, 10, 0) raises the ValueError the test expects; the claim repeats a wrong risky part from the understanding.
