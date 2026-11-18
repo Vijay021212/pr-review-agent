@@ -162,3 +162,10 @@ def test_the_understand_call_is_untouched_by_screening() -> None:
         "goal_source",
     ]
     assert "addressed_to_reviewer" not in load("understand").text
+
+
+def test_every_field_the_model_answers_is_required() -> None:
+    # risky_parts had a default, so the schema didn't require it, and the model left it out
+    # of every answer (#88). An empty list is how it says there are none.
+    schema = UnderstandingAnswer.model_json_schema()
+    assert set(schema["required"]) == set(schema["properties"])
