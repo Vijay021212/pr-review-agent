@@ -127,8 +127,8 @@ def build_message(
     batch: tuple[ChangedFile, ...],
 ) -> str:
     risky = "\n".join(f"- {part}" for part in understanding.risky_parts) or "- (none named)"
-    # What the pull request tells the reviewer to do or conclude is left out (NFR-5); it's
-    # left out before clipping, so a passage can't be cut in two and missed.
+    # What the pull request tells the reviewer to do or conclude, in its text or in a comment
+    # it adds, is left out (NFR-5); before clipping, so a passage can't be cut in two.
     passages = understanding.addressed_to_reviewer
     description = clip(leave_out(pull_request.description, passages), DESCRIPTION_CHARS)
     parts = [
@@ -150,10 +150,8 @@ def build_message(
             for excerpt in explored.excerpts
         )
         parts += ["## Related code (unchanged, for context)", data_block("RELATED CODE", related)]
-    parts += [
-        "## The changes to review",
-        data_block("DIFF", "\n\n".join(render_file(file) for file in batch)),
-    ]
+    diff = "\n\n".join(render_file(file) for file in batch)
+    parts += ["## The changes to review", data_block("DIFF", leave_out(diff, passages))]
     return "\n\n".join(parts)
 
 

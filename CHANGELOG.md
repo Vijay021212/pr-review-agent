@@ -18,7 +18,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Security
 
-- Sentences of a pull request's title, description or linked issues that tell the reviewer, or an AI, what to do or what to conclude are quoted by a screen step of their own, right after the understand stage, left out of what the finding passes read when found word for word, and listed in the summary; the model followed such a sentence and approved an SQL injection. Asking for them in the understand call itself reworded how half the pull requests were understood ([#70](https://github.com/Vijay021212/pr-review-agent/issues/70), [#80](https://github.com/Vijay021212/pr-review-agent/issues/80)).
+- Sentences of a pull request's title, description or linked issues that tell the reviewer, or an AI, what to do or what to conclude are quoted by a screen step of their own, right after the understand stage, left out of what the finding passes read when found word for word, and listed in the summary; the model followed such a sentence and approved an SQL injection. Asking for them in the understand call itself reworded how half the pull requests were understood. Comments the change adds are screened the same way, line by line, and left out of what the explore stage, the finding passes and the double-check read; a line of code never is ([#70](https://github.com/Vijay021212/pr-review-agent/issues/70), [#80](https://github.com/Vijay021212/pr-review-agent/issues/80), [#82](https://github.com/Vijay021212/pr-review-agent/issues/82)).
 
 ### Fixed
 

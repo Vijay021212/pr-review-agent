@@ -156,7 +156,7 @@ def _run_stages(
         _record_calls(run_log, "understand", [call])
         calls.append(call)
     with stages.run("screen", "Looking for text that tells the reviewer what to do"):
-        passages, call = screen(pull_request, model, deadline)
+        passages, call = screen(pull_request, scope, model, deadline)
         _record_calls(run_log, "screen", [call])
         calls.append(call)
         if passages:
@@ -193,7 +193,13 @@ def _run_stages(
                 dropped += found.dropped
         with stages.run("double-check", f"Double-checking {len(kept)} finding(s)"):
             findings, verify_calls = verify(
-                tuple(kept), tuple(dropped), pull_request.files, root, model, deadline
+                tuple(kept),
+                tuple(dropped),
+                pull_request.files,
+                root,
+                model,
+                deadline,
+                passages=understanding.addressed_to_reviewer,
             )
             _record_calls(run_log, "double-check", verify_calls)
             calls += verify_calls

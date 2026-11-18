@@ -35,7 +35,7 @@ from pr_review_agent.domain import (
     Severity,
     Side,
 )
-from pr_review_agent.prompts import data_block, load
+from pr_review_agent.prompts import data_block, leave_out, load
 from pr_review_agent.stages import ModelCall, ask
 
 FINDINGS_PER_CALL = 4
@@ -67,8 +67,11 @@ def verify(
     root: Path,
     model: ChatModel,
     deadline: Deadline,
+    *,
+    passages: tuple[str, ...] = (),
 ) -> tuple[CheckedFindings, tuple[ModelCall, ...]]:
-    """`dropped_before` holds findings an earlier stage already dropped, with their reasons."""
+    """`dropped_before` holds findings an earlier stage already dropped, with their reasons;
+    `passages` is what the pull request tells the reviewer to do, left out of the code shown."""
     anchored = anchor_all(findings, files)
     failures = drop_no_failure(anchored.kept)
     by_path = {file.path: file for file in files}
@@ -80,7 +83,7 @@ def verify(
         group = failures.kept[start : start + FINDINGS_PER_CALL]
         deadline.check("the double-check")
         answer, call = ask(
-            model, prompt, build_message(group, by_path, root), VerifyAnswer, deadline
+            model, prompt, build_message(group, by_path, root, passages), VerifyAnswer, deadline
         )
         calls.append(call)
         decisions = {decision.number: decision for decision in answer.decisions}
@@ -103,7 +106,12 @@ def verify(
     return checked, tuple(calls)
 
 
-def build_message(group: tuple[Finding, ...], files: dict[str, ChangedFile], root: Path) -> str:
+def build_message(
+    group: tuple[Finding, ...],
+    files: dict[str, ChangedFile],
+    root: Path,
+    passages: tuple[str, ...] = (),
+) -> str:
     parts = []
     for number, finding in enumerate(group, start=1):
         text = "\n".join(
@@ -125,7 +133,7 @@ def build_message(group: tuple[Finding, ...], files: dict[str, ChangedFile], roo
             ]
         )
         parts += [f"## Finding {number}", data_block(f"FINDING {number}", text)]
-        code = _code_around(root, finding)
+        code = leave_out(_code_around(root, finding), passages)
         if code:
             parts += [
                 f"Code around line {finding.line} at the reviewed commit:",
@@ -135,7 +143,7 @@ def build_message(group: tuple[Finding, ...], files: dict[str, ChangedFile], roo
         if file is not None:
             parts += [
                 "The change near it:",
-                data_block(f"DIFF {number}", _diff_around(file, finding)),
+                data_block(f"DIFF {number}", leave_out(_diff_around(file, finding), passages)),
             ]
     parts.append(f"Give a decision for each of the {len(group)} findings above.")
     return "\n\n".join(parts)
