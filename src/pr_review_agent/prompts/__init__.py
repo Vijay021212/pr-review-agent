@@ -55,6 +55,21 @@ def parse(name: str, raw: str, read_part: Callable[[str], str] | None = None) ->
     return Prompt(name=name, version=int(version[1]), text=text.strip())
 
 
+_SEVERITY_LINE = re.compile(r"^- \w+: (?P<text>.+)$", re.MULTILINE)
+
+
+@cache
+def severity_definitions() -> tuple[str, ...]:
+    """The sentences that define the severity levels, and their examples, as every prompt
+    includes them (requirements 5.2): read from `parts/severity.md`, so code that looks for
+    them can't drift from the prompts. Without "Example:" and the closing full stop."""
+    return tuple(
+        sentence.removeprefix("Example:").strip().rstrip(".")
+        for line in _SEVERITY_LINE.finditer(_read("parts/severity.md"))
+        for sentence in re.split(r"(?<=\.)\s+", line["text"].strip())
+    )
+
+
 def _read(path: str) -> str:
     folder = resources.files("pr_review_agent.prompts")
     for part in path.split("/"):

@@ -2,6 +2,7 @@
 
     anchor on a changed line -> drop findings that describe no failure
         -> re-check with the model -> remove duplicates -> drop style noise
+        -> replace severity reasons that only repeat the definitions
 
 The model gets the same context the finding passes had (what the pull request is for, its
 title and description, the notes from exploring, the related code; #84), then each finding
@@ -14,6 +15,7 @@ before the model cost nothing, so they save model calls.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -40,7 +42,7 @@ from pr_review_agent.domain import (
     Side,
     Understanding,
 )
-from pr_review_agent.prompts import data_block, leave_out, load
+from pr_review_agent.prompts import data_block, leave_out, load, severity_definitions
 from pr_review_agent.stages import ModelCall, ask, review_context
 from pr_review_agent.tools import ReadOnlyTools, ToolRefused, normalize_path
 
@@ -50,6 +52,9 @@ DIFF_LINES_AROUND = 12  # lines of the diff shown around it
 PLACES_PER_FINDING = 2  # other places a finding names whose code is shown
 PLACE_LINES_AROUND = 6  # lines shown before and after each of them
 SERIOUS = (Severity.CRITICAL, Severity.HIGH)
+NOTE_START = " (The double-check "  # how its notes on a severity reason begin
+OWN_WORDS = 4  # a severity reason with fewer words of its own only repeats the definitions
+NO_REASON = "No reason of its own was given (the model repeated the severity definitions)."
 
 
 class Decision(BaseModel):
@@ -109,7 +114,8 @@ def verify(
     unique = remove_duplicates(tuple(kept))
     useful = drop_style_noise(unique.kept)
     checked = CheckedFindings(
-        kept=useful.kept, dropped=(*dropped, *unique.dropped, *useful.dropped)
+        kept=tuple(_own_reason(finding) for finding in useful.kept),
+        dropped=(*dropped, *unique.dropped, *useful.dropped),
     )
     return checked, tuple(calls)
 
@@ -222,7 +228,7 @@ def _disputed(finding: Finding, decision: Decision) -> Finding:
     real Critical or High problem is the worst mistake a reviewer can make. As a potential
     risk it asks a person to decide (rule 2(d) of requirements 5.3) with both views shown.
     """
-    note = f" (The double-check disputed this finding: {decision.reason} A person should decide.)"
+    note = f"{NOTE_START}disputed this finding: {decision.reason} A person should decide.)"
     return finding.model_copy(
         update={
             "status": FindingStatus.POTENTIAL_RISK,
@@ -234,9 +240,8 @@ def _disputed(finding: Finding, decision: Decision) -> Finding:
 def _corrected(finding: Finding, decision: Decision) -> Finding:
     """The finding with what the double-check raised: a higher severity, or confirmed.
 
-    The double-check never makes a finding weaker. It sees only the code around the line
-    and the change near it, less than the finding pass had, and every finding it lowered in
-    the evaluations was right (#72); weakening a real problem is the costliest mistake, the
+    The double-check never makes a finding weaker: every finding it lowered in the
+    evaluations was right (#72), and weakening a real problem is the costliest mistake, the
     reason `_disputed()` keeps serious findings too. A raise is noted with its reason.
     """
     severity = min(finding.severity, decision.severity, key=lambda level: level.rank)
@@ -245,7 +250,7 @@ def _corrected(finding: Finding, decision: Decision) -> Finding:
     if (severity, status) == (finding.severity, finding.status):
         return finding
     note = (
-        f" (The double-check changed this from {finding.severity.value.title()}, "
+        f"{NOTE_START}changed this from {finding.severity.value.title()}, "
         f"{finding.status}: {decision.reason})"
     )
     return finding.model_copy(
@@ -255,3 +260,21 @@ def _corrected(finding: Finding, decision: Decision) -> Finding:
             "severity_reason": finding.severity_reason + note,
         }
     )
+
+
+def _own_reason(finding: Finding) -> Finding:
+    """The finding, with a severity reason that only repeats the definitions replaced.
+
+    Every finding gives the reason for its severity (requirements 5.2), but the model
+    sometimes answers with a definition copied from the prompt, often the Critical one on a
+    High finding, so the comment would claim harm that has nothing to do with the change
+    (#86). With the definitions and examples taken out, a reason needs a few words of its
+    own; if it hasn't, it's replaced by a plain note. A note the double-check added stays.
+    """
+    reason, note, rest = finding.severity_reason.partition(NOTE_START)
+    remaining = reason
+    for sentence in severity_definitions():
+        remaining = re.sub(re.escape(sentence), " ", remaining, flags=re.IGNORECASE)
+    if len(re.findall(r"[A-Za-z0-9_']+", remaining)) >= OWN_WORDS:
+        return finding
+    return finding.model_copy(update={"severity_reason": NO_REASON + note + rest})

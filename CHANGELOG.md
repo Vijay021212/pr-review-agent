@@ -22,6 +22,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- A severity reason that only repeats the severity definitions, often the Critical one on a High finding, is replaced by a plain note that no reason of its own was given, instead of being posted as the reason ([#86](https://github.com/Vijay021212/pr-review-agent/issues/86)).
 - The double-check judges each finding with the same context the finding passes had (what the pull request is for, its description, the notes from exploring and the related code) and the code at the other places a finding names, read through the read-only tools; before, it doubted findings it couldn't see the evidence for, and its disputes were right half the time ([#84](https://github.com/Vijay021212/pr-review-agent/issues/84)).
 - The evaluation leaves `__pycache__` folders out of a case (Python writes them when a case's code is run), and refuses any other file that isn't UTF-8 text with a message naming it, instead of stopping with a bare `UnicodeDecodeError` ([#78](https://github.com/Vijay021212/pr-review-agent/issues/78)).
 - The double-check may raise a finding's severity or confirm it, but no longer lowers either: every finding it lowered in the evaluations was right, and in one it turned a confirmed Critical division by zero into a Low potential risk, and Request Changes into Approve ([#72](https://github.com/Vijay021212/pr-review-agent/issues/72)).
