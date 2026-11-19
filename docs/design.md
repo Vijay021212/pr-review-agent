@@ -130,7 +130,7 @@ class ChatModel(Protocol):
 
 **Structured output with retry (FR-9):** every reply is checked against its Pydantic type. If it doesn't match, the agent sends the model one follow-up that names the problem ("`line` must be a whole number"), then gives up with an error. The run log records every retry.
 
-**Settings for the default model:** temperature 0, context window 16,384 tokens (a setting), answer limit 1,024 tokens. 16k gives room for a 300-line diff plus explored code; it uses more RAM than the 8k used in the ADR-001 test, so the evaluation will confirm it.
+**Settings for the default model:** temperature 0, context window 16,384 tokens (a setting), answer limit 1,024 tokens. 16k gives room for a 300-line diff plus explored code; it uses more RAM than the 8k used in the ADR-001 test. The evaluation of v0.3.0 confirmed it ([#23](https://github.com/Vijay021212/pr-review-agent/issues/23)): all 99 reviews ran in the laptop's memory, the largest model call used 1,851 of the 16,384 tokens, and nothing was cut to fit. Its cases are small (at most 21 changed lines), so the room for big changes is worked out, not measured: the budget (section 6) leaves about 9,900 tokens of diff per model call, where 8k would leave about 1,700.
 
 ## 5. The explore stage (the agent loop)
 
