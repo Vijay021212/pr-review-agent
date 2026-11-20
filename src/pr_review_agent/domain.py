@@ -369,7 +369,9 @@ class UnderstandingAnswer(_Frozen):
 
     goal: NonEmptyStr
     summary: NonEmptyStr
-    risky_parts: tuple[NonEmptyStr, ...] = ()
+    # Required, like every field the model answers: small models leave optional fields out,
+    # and this one was left out of every answer (#88). An empty list says there are none.
+    risky_parts: tuple[NonEmptyStr, ...]
     goal_unclear: bool
     goal_source: GoalSource
 
@@ -377,6 +379,8 @@ class UnderstandingAnswer(_Frozen):
 class Understanding(UnderstandingAnswer):
     """What the pull request is for (FR-2), and what its text tells the reviewer to do."""
 
+    # Stored, it may be left out: other code and results saved before still load.
+    risky_parts: tuple[NonEmptyStr, ...] = ()
     # Sentences of the pull request's text that tell the reviewer, or an AI, what to do or
     # what to conclude, quoted exactly by the screen stage; left out of what the finding
     # passes read (NFR-5).

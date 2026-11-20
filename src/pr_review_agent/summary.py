@@ -102,7 +102,9 @@ def _understanding(result: ReviewResult) -> str:
         f"**What changed:** {understanding.summary}",
     ]
     if understanding.risky_parts:
-        lines += ["", "**Risky parts:**", *(f"- {part}" for part in understanding.risky_parts)]
+        # The model's guesses before the review, never checked: shown to the person only.
+        title = "**Risky parts** (guessed before the review, not checked):"
+        lines += ["", title, *(f"- {part}" for part in understanding.risky_parts)]
     if understanding.addressed_to_reviewer:
         lines += [
             "",

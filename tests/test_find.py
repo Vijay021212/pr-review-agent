@@ -156,19 +156,19 @@ def test_the_message_holds_the_understanding_text_and_diff() -> None:
     pull_request = make_pull_request(title="Add a discount", description="Members get 10% off.")
     message = build_message(pull_request, UNDERSTANDING, ExploredContext(), (CART,))
     assert "Goal: Give members a discount." in message
-    assert "- cart.py: every member total changes" in message
+    # The risky parts are unchecked guesses for the person, never hints to the model (#88).
+    assert "every member total changes" not in message
+    assert "Risky parts" not in message
     assert "<<<BEGIN TITLE>>>\nAdd a discount" in message
     assert "Members get 10% off." in message
     assert "     2 +     return total * 0.9" in message
     assert "Related code" not in message
 
 
-def test_the_message_says_when_nothing_risky_was_named() -> None:
-    understanding = UNDERSTANDING.model_copy(update={"risky_parts": ()})
+def test_an_empty_description_is_said() -> None:
     message = build_message(
-        make_pull_request(description=""), understanding, ExploredContext(), (CART,)
+        make_pull_request(description=""), UNDERSTANDING, ExploredContext(), (CART,)
     )
-    assert "- (none named)" in message
     assert "<<<BEGIN DESCRIPTION>>>\n(empty)" in message
 
 

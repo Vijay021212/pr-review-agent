@@ -74,7 +74,10 @@ def test_the_summary_opens_with_what_the_agent_understood() -> None:
     text = summary(understanding=make_understanding(risky_parts=("cart.py: totals change",)))
     assert "**Goal** (from the description): Give members a 10% discount." in text
     assert "**What changed:** Adds discount() and uses it in the cart total." in text
-    assert "**Risky parts:**\n- cart.py: totals change" in text
+    assert (
+        "**Risky parts** (guessed before the review, not checked):\n- cart.py: totals change"
+        in text
+    )
     assert "The goal is unclear" not in text
 
 
