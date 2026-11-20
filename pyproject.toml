@@ -26,7 +26,7 @@ classifiers = [
 dependencies = [
     "httpx>=0.28.1",  # calls to GitHub and the model providers
     "pydantic>=2.14.3",  # data types and validation of model output
-    "pydantic-settings>=2.16.2",  # settings from PRRA_ environment variables and .env
+    "pydantic-settings>=2.16.3",  # settings from PRRA_ environment variables and .env
     "pyyaml>=6.0.2",  # the evaluation's case files
 ]
 
@@ -44,7 +44,7 @@ dev = [
     "mypy>=2.4.1",        # type checker, strict mode
     "pytest>=9.2.0",      # test runner
     "pytest-cov>=7.1.0",  # coverage measurement and the 90% gate
-    "ruff>=0.17.4",       # linter and formatter
+    "ruff>=0.17.5",       # linter and formatter
     "types-pyyaml>=6.0.12",  # type information for pyyaml, for mypy
 ]
 
