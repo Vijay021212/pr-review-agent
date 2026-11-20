@@ -1,0 +1,14 @@
+title: Accept product photos on the public upload form
+description: Anyone can upload a product photo through the public form; the photo is read into memory
+  and saved.
+kind: planted
+recommendation: Request Changes
+held_out: true
+problems:
+- file: photos.py
+  marker: data = stream.read()
+  lines: 1
+  level: 5
+  category: security
+  what: The whole upload is read into memory with no size limit, so one huge upload can exhaust the server's
+    memory.

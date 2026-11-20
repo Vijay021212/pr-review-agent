@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +20,7 @@ from pr_review_agent.domain import (
     RecommendationValue,
     SetupError,
 )
-from pr_review_agent.evaluation.cases import CaseKind, load_case, load_cases
+from pr_review_agent.evaluation.cases import Case, CaseKind, load_case, load_cases
 from pr_review_agent.evaluation.fixture import FixtureGitHub
 from pr_review_agent.evaluation.report import (
     render_report,
@@ -28,6 +29,7 @@ from pr_review_agent.evaluation.report import (
 )
 from pr_review_agent.evaluation.runner import run_evaluation
 from pr_review_agent.evaluation.scoring import CaseRun, match_findings, score, summarize
+from pr_review_agent.sensitive import find_sensitive
 from tests.builders import make_finding, make_result
 from tests.fakes import EXPLORE_DONE, KEEP_ONE, FakeChatModel
 
@@ -476,3 +478,64 @@ def test_the_eval_command_runs_every_case_as_often_as_asked(
     assert cli.main(["eval", str(tmp_path / "cases"), "--runs", "2", "--out", str(out)]) == 0
     runs = json.loads((out / "results.json").read_text(encoding="utf-8"))
     assert [run["run"] for run in runs] == [1, 2]
+
+
+# --- The evaluation cases in eval/cases (#22) ----------------------------------------------
+#
+# These check the case set itself against requirements 7.1, so it can't quietly shrink below
+# its minimum or drift from its rules. The 3 design-fit and 3 code-quality cases come with
+# pass C (#24), which is the pass that looks for those problems.
+
+CASES_FOLDER = Path(__file__).parent.parent / "eval" / "cases"
+LEVELS = range(1, 6)
+
+
+@pytest.fixture(scope="module")
+def eval_cases() -> tuple[Case, ...]:
+    return load_cases(CASES_FOLDER)
+
+
+def _of_kind(cases: tuple[Case, ...], kind: CaseKind) -> list[Case]:
+    return [case for case in cases if case.spec.kind is kind]
+
+
+def test_the_cases_meet_the_minimum_size(eval_cases: tuple[Case, ...]) -> None:
+    planted = _of_kind(eval_cases, CaseKind.PLANTED)
+    per_level = Counter(int(p.problem.level) for case in planted for p in case.problems)
+    assert all(per_level[level] >= 5 for level in LEVELS), per_level
+    assert len(_of_kind(eval_cases, CaseKind.CLEAN)) >= 5
+    assert len(_of_kind(eval_cases, CaseKind.INJECTION)) >= 3
+
+
+def test_about_a_third_of_every_kind_is_held_out(eval_cases: tuple[Case, ...]) -> None:
+    held_out = [case for case in eval_cases if case.spec.held_out]
+    assert 0.3 <= len(held_out) / len(eval_cases) <= 0.4
+    held_levels = {int(p.problem.level) for case in held_out for p in case.problems}
+    assert held_levels >= set(LEVELS)
+    assert {case.spec.kind for case in held_out} == set(CaseKind)
+
+
+def test_each_planted_case_has_exactly_one_problem(eval_cases: tuple[Case, ...]) -> None:
+    for case in eval_cases:
+        expected = 0 if case.spec.kind is CaseKind.CLEAN else 1
+        if case.spec.kind is CaseKind.INJECTION:
+            expected = len(case.spec.problems)  # some only try to make up a problem
+        assert len(case.problems) == expected, case.name
+        if not case.problems:
+            assert case.spec.recommendation is RecommendationValue.APPROVE, case.name
+
+
+def test_every_planted_problem_is_on_a_changed_line(eval_cases: tuple[Case, ...]) -> None:
+    # A finding can only be posted on a changed line (FR-10), so a planted problem must
+    # touch one, or no finding could ever catch it.
+    for case in eval_cases:
+        files = {file.path: file for file in case.pull_request.files}
+        for located in case.problems:
+            span = set(range(located.first_line, located.last_line + 1))
+            assert span & files[located.problem.file].added_lines, case.name
+
+
+def test_no_case_touches_a_sensitive_area(eval_cases: tuple[Case, ...]) -> None:
+    # Otherwise rule 2(c) would decide the expected recommendation, not the planted problem.
+    for case in eval_cases:
+        assert find_sensitive(file.path for file in case.pull_request.files) == (), case.name

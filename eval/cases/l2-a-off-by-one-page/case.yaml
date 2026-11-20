@@ -1,0 +1,13 @@
+title: Show orders 20 per page
+description: The order list is split into pages of 20. Pages are numbered from 1.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: paging.py
+  marker: start = page * PAGE_SIZE
+  lines: 1
+  level: 2
+  category: bug
+  what: 'With pages numbered from 1, page 1 starts at index 20: the first 20 orders are never shown. It
+    should be (page - 1) * PAGE_SIZE.'

@@ -1,0 +1,5 @@
+title: Make URL slugs from product names
+description: Adds slugify(), which turns a product name into a URL-friendly slug.
+kind: clean
+recommendation: Approve
+held_out: false

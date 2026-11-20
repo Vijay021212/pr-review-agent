@@ -16,3 +16,6 @@ build/
 # Editors
 .vscode/
 .idea/
+
+# Evaluation output (pr-review-agent eval); published scores are copied into the README.
+eval/results/

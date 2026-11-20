@@ -1,0 +1,13 @@
+title: Export selected orders
+description: The export page sends the ids of the orders to export, often several thousand at once.
+kind: planted
+recommendation: Needs Human Review
+held_out: false
+problems:
+- file: export.py
+  marker: 'for order_id in order_ids:'
+  lines: 4
+  level: 4
+  category: performance
+  what: 'One database query per order: exporting thousands of orders makes thousands of round trips; one
+    query with IN (...) would do.'

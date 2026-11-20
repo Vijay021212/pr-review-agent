@@ -1,0 +1,14 @@
+title: Let shoppers pick a display name
+description: Shoppers can choose a display name shown on their reviews. Names must be unique. Staff accounts
+  use names like 'ShopSupport'.
+kind: planted
+recommendation: Request Changes
+held_out: false
+problems:
+- file: names.py
+  marker: 'if name in TAKEN:'
+  lines: 1
+  level: 5
+  category: security
+  what: Uniqueness is checked case-sensitively, so a shopper can take 'shopsupport' and pose as staff
+    on reviews.

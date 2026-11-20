@@ -1,0 +1,5 @@
+title: Document the stock helpers
+description: Adds docstrings and type hints to the stock helpers. No behaviour changes.
+kind: clean
+recommendation: Approve
+held_out: false
