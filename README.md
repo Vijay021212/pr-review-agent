@@ -5,7 +5,7 @@
 
 An AI agent that reviews GitHub pull requests the way a careful senior engineer would: it understands the goal of the change, explores the related code on its own, finds real problems at five review levels, double-checks them, and posts one clear review with a recommendation. It runs on a **free local model** by default (Ollama), and can be switched to a paid model through settings.
 
-> **Status:** in development. Reviews in the terminal and on GitHub work; measured scores come with v0.3.0. Progress is tracked in the [issues](https://github.com/Vijay021212/pr-review-agent/issues), [milestones](https://github.com/Vijay021212/pr-review-agent/milestones) and [project board](https://github.com/users/Vijay021212/projects/2).
+> **Status:** in development. Reviews in the terminal and on GitHub work, and how well they work is measured: see the [scores of v0.3.0](#scores-of-v030). Progress is tracked in the [issues](https://github.com/Vijay021212/pr-review-agent/issues), [milestones](https://github.com/Vijay021212/pr-review-agent/milestones) and [project board](https://github.com/users/Vijay021212/projects/2).
 
 ## Requirements
 
@@ -105,7 +105,39 @@ uv run pr-review-agent eval eval/cases --rescore eval/results/<date-time>
 
 The cases in `eval/cases` are 33 small pull requests: 25 with one planted problem each (5 per review level, from a missing None check to a race on a wallet balance), 5 clean changes where any comment is a false alarm, and 3 prompt-injection attempts. 12 of them, spread over every kind and level, are held out: they are never looked at while tuning prompts or settings, so their scores show how the agent does on changes it wasn't tuned on.
 
-*Scores are published from v0.3.0.*
+### Scores of v0.3.0
+
+Measured on 18 and 19 November 2026 with the default model, `qwen2.5-coder:7b`, on a Windows laptop with 24 GB RAM and no GPU: the 33 cases, 3 runs each, every finding read, and nothing tuned before or during the run. The report, the review sheet with every finding and its reading, and the raw results are in [`eval/published/0.3.0/`](eval/published/0.3.0/).
+
+| Measure | Target ([requirements 7](docs/requirements.md#7-how-we-measure-success)) | All 33 cases | 12 held out | Target met |
+|---|---|---|---|---|
+| Catch rate | 60% or more | 41% | 40% | No |
+| Precision | 70% or more | 86% | 80% | Yes |
+| False alarms per pull request | 1 or fewer | 0.1 | 0.1 | Yes |
+| Line accuracy | 90% or more | 73% | 75% | No |
+| Recommendation accuracy | 80% or more | 39% | 33% | No |
+| Comments per clean pull request | 1 or fewer | 0.0 | 0.0 | Yes |
+| Prompt injections resisted | 100% | 100% | 100% | Yes |
+| Minutes per pull request | under 5 (up to 300 lines) | 1.8 | 1.8 | On small changes |
+| Slowest review, minutes | under 10 (up to 500 lines) | 3.0 | 3.0 | On small changes |
+
+| Review level | Catch rate | Precision |
+|---|---|---|
+| 1. Obvious bugs | 20% | 80% |
+| 2. Logic errors, missing conditions, edge cases | 20% | 50% |
+| 3. Execution flow, dependencies, regression risks | 60% | 100% |
+| 4. Architecture, security, performance | 71% | 100% |
+| 5. Adversarial scenarios, unusual combinations | 20% | no findings |
+
+- **When it reports a problem, it's usually right, but it misses most of them.** 86% of its findings are right, it commented on none of the clean changes, and it ignored every prompt injection; it catches 41% of the planted problems. It does far better on a change that breaks other code or opens a security hole (levels 3 and 4) than on a bug inside the changed lines themselves (levels 1, 2 and 5), where it catches 1 in 5. Each level has 5 to 7 planted problems, so one case moves a level's score by 14 to 20 points.
+- **The held-out cases score like the tuning cases** (40% and 41% caught), so the tuning didn't fit the agent to the cases it was tuned on.
+- **The three runs gave the same scores**: at temperature 0, every case got the same recommendation and the same findings each time.
+- **The recommendation follows the catch rate.** Of the 20 wrong recommendations in each run, 15 are Approve on a change whose problem was missed, 4 found the problem but left the decision to a person (Needs Human Review) instead of asking for changes, and 1 came from a false alarm.
+- **Some right findings were removed by the agent's own checks.** The double-check rejected 6 right findings with reasons that agree with them: it dropped 2, so their problems were missed (l3-a, l5-d), and sent the other 4 to a person instead of asking for changes ([#92](https://github.com/Vijay021212/pr-review-agent/issues/92)). The rule for findings that describe no failure dropped one more, whose explanation named the bug (l2-a, [#93](https://github.com/Vijay021212/pr-review-agent/issues/93)).
+- **Speed and the context window are confirmed on small changes only:** the cases have at most 21 changed lines. The largest model call, question and answer, used 1,851 of the 16,384 tokens, and nothing was cut to fit. The 16k window stays: it leaves about 9,900 tokens for the diff in each model call, room for a 300-line change at up to 90 characters a line, where 8k would leave about 1,700.
+- **Only the 7B model was measured.** `qwen3-coder:30b` doesn't fit in this laptop's memory during normal work ([ADR-001](docs/adr/001-model-choice.md)). The model is a setting, so the same evaluation measures any other.
+
+Each gap has its own issue: the catch rate ([#94](https://github.com/Vijay021212/pr-review-agent/issues/94)), the double-check ([#92](https://github.com/Vijay021212/pr-review-agent/issues/92)) and the rule ([#93](https://github.com/Vijay021212/pr-review-agent/issues/93)) that removed right findings, the recommendation accuracy ([#100](https://github.com/Vijay021212/pr-review-agent/issues/100)), findings on a function's first line ([#95](https://github.com/Vijay021212/pr-review-agent/issues/95)), a function named that doesn't exist ([#96](https://github.com/Vijay021212/pr-review-agent/issues/96)), a request for a docstring posted as a bug ([#97](https://github.com/Vijay021212/pr-review-agent/issues/97)), speed on big pull requests ([#98](https://github.com/Vijay021212/pr-review-agent/issues/98)) and the per-level targets ([#99](https://github.com/Vijay021212/pr-review-agent/issues/99)).
 
 ## Development
 

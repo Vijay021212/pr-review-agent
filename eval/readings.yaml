@@ -237,3 +237,18 @@
   at: wallet.py:18
   verdict: false alarm
   reason: Asks for a docstring, a matter of style labelled as a bug; not the unlocked check and change of the balance.
+- case: l1-d-mutable-default
+  finding: 496a4d9367a7
+  at: cart.py:5
+  verdict: false alarm
+  reason: Describes passing None as the cart, which the signature doesn't allow (and would raise AttributeError), not the default list shared between calls.
+- case: l3-f-points-added-twice
+  finding: 3a3ac6449f39
+  at: loyalty.py:10
+  verdict: same problem
+  reason: checkout() adds the points through award_points() and again on the next line, so they're added twice (it blames atomicity, wrongly, but its current and expected behaviour and its fix are right).
+- case: l3-g-renamed-key
+  finding: 709a19942872
+  at: orders.py:2
+  verdict: same problem
+  reason: Renaming the key total to total_cents breaks code that still reads order['total']; it doesn't name receipt.receipt_line(), the one that does, and its fix (rename the key back) undoes the change's goal.
