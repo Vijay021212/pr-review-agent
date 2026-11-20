@@ -158,6 +158,22 @@ def test_findings_that_cant_be_anchored_never_reach_the_model(root: Path) -> Non
     assert checked.dropped[0].reason.startswith("`src/other.py` isn't changed")
 
 
+def test_findings_that_describe_no_failure_never_reach_the_model(root: Path) -> None:
+    same = "Returns the correct number of pages."
+    praise = make_finding(
+        file="src/cart.py", line=20, current_behaviour=same, expected_behaviour=same
+    )
+    real = make_finding(file="src/cart.py", line=30)
+    model = FakeChatModel([double_check(True)])
+    checked, calls = check(model, root, praise, real)
+    assert len(calls) == 1
+    assert "## Finding 2" not in model.calls[0].user  # only the real finding was asked about
+    assert checked.kept == (real,)
+    assert [d.reason for d in checked.dropped] == [
+        "it describes no failure: what happens now is what should happen"
+    ]
+
+
 def test_earlier_drops_duplicates_and_style_noise_are_all_kept_with_reasons(root: Path) -> None:
     earlier = DroppedFinding(finding=make_finding(file="x.py"), reason="Not in this batch.")
     bug = make_finding(file="src/cart.py", line=20, severity=Severity.HIGH)
