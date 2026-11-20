@@ -36,6 +36,7 @@ from pr_review_agent.evaluation.report import (
 )
 from pr_review_agent.evaluation.runner import run_evaluation
 from pr_review_agent.evaluation.scoring import CaseRun, match_findings, score, summarize
+from pr_review_agent.evaluation.yaml_files import read_yaml
 from pr_review_agent.sensitive import find_sensitive
 from pr_review_agent.version import __version__
 from tests.builders import make_finding, make_result
@@ -199,8 +200,16 @@ def test_a_wrong_case_yaml_names_each_field_and_the_value_given(tmp_path: Path) 
 @pytest.mark.parametrize(
     ("content", "message"),
     [
-        ("title: [unclosed\n", r"isn't valid YAML: .* \(line 2, column 1\)"),
+        (  # where the bracket opens, not only where the parser gave up
+            "title: [unclosed\n",
+            r"isn't valid YAML: while parsing a flow sequence \(line 1, column 8\): "
+            r".* \(line 2, column 1\)",
+        ),
         ("title: a\x07b\n", "isn't valid YAML: unacceptable character #x0007: .* at position 8"),
+        (
+            "title: a: b\n",
+            r"isn't valid YAML: mapping values are not allowed here \(line 1, column 9\)\.",
+        ),
         (None, "isn't UTF-8 text"),  # the file is saved as UTF-16, as Windows tools often do
     ],
 )
@@ -216,6 +225,32 @@ def test_a_case_yaml_that_cant_be_read_is_named(
     with pytest.raises(SetupError, match=message) as caught:
         load_case(folder)
     assert str(path) in caught.value.problem
+
+
+def test_text_that_looks_like_a_date_stays_text(tmp_path: Path) -> None:
+    # A marker is copied from a line of code; an impossible date stopped the loading.
+    path = tmp_path / "case.yaml"
+    path.write_text("marker: 2026-02-29\nother: 2024-02-29\n", encoding="utf-8")
+    assert read_yaml(path, what="The file", fix="-") == {
+        "marker": "2026-02-29",
+        "other": "2024-02-29",
+    }
+
+
+def test_a_value_yaml_cant_convert_is_named(tmp_path: Path) -> None:
+    path = tmp_path / "case.yaml"
+    path.write_text("number: 0x_\n", encoding="utf-8")
+    with pytest.raises(SetupError, match=r"isn't valid YAML: invalid literal for int\(\)"):
+        read_yaml(path, what="The file", fix="-")
+
+
+def test_a_missing_colon_is_named_at_its_own_line(tmp_path: Path) -> None:
+    path = tmp_path / "readings.yaml"
+    path.write_text("- case: c\n  finding 0123456789ab\n  verdict: x\n", encoding="utf-8")
+    with pytest.raises(
+        SetupError, match=r"while scanning a simple key \(line 2, column 3\): could not find"
+    ):
+        load_readings(path)
 
 
 # --- The fixture -----------------------------------------------------------------------
@@ -322,8 +357,48 @@ def test_a_real_problem_inside_the_planted_lines_is_near_them_without_catching(
     (match,) = match_findings(run.case, run.findings, readings)
     assert (match.near is not None, match.problem, match.catches) == (True, None, False)
     data = json.loads(results_json([run], runs=1, settings_line="s", readings=readings))
-    assert data["reviews"][0]["findings"][0]["near_line"] == 4
+    (found,) = data["reviews"][0]["findings"]
+    assert (found["near_line"], found["catches"]) == (4, False)
     assert "near the planted problem at line 4" in render_review_sheet([run], readings)
+
+
+TWO = [
+    {**PROBLEM, "marker": "total = sum", "level": 1},  # line 2
+    {**PROBLEM, "marker": "return total / count", "level": 4},  # line 4
+]
+
+
+@pytest.mark.parametrize("problems", [TWO, TWO[::-1]])
+def test_a_finding_counts_for_the_problem_it_sits_on_whatever_their_order(
+    tmp_path: Path, problems: list[dict[str, Any]]
+) -> None:
+    # Near both planted problems, it can catch only the nearer one, the one the sheet names.
+    run = case_run(tmp_path, finding(4), problems=problems)
+    (match,) = match_findings(run.case, run.findings)
+    assert match.problem is match.near
+    assert (match.problem is not None, match.exact) == (True, True)
+    assert match.problem.first_line == 4  # type: ignore[union-attr]
+    scores = score([run])
+    assert (scores.catch_rate_by_level[1], scores.catch_rate_by_level[4]) == (0.0, 1.0)
+    assert "near the planted problem at line 4" in render_review_sheet([run])
+
+
+def test_a_finding_read_as_the_problem_catches_before_a_nearer_one_not_read_yet(
+    tmp_path: Path,
+) -> None:
+    read, unread = finding(1), finding(4)
+    readings = readings_for(tmp_path, reading_of(read, "same problem"))
+    run = case_run(tmp_path, read, unread)
+    first, second = match_findings(run.case, run.findings, readings)
+    assert (first.finding.line, first.catches, second.catches) == (1, True, False)
+    scores = score([run], readings)
+    assert (scores.catch_rate, scores.precision, scores.line_accuracy) == (1.0, 1.0, 0.0)
+
+
+def test_of_two_findings_as_near_the_first_catches(tmp_path: Path) -> None:
+    run = case_run(tmp_path, finding(5), finding(3))  # one line after and one before line 4
+    first, second = match_findings(run.case, run.findings)
+    assert (first.finding.line, first.catches, second.catches) == (3, True, False)
 
 
 def test_scores_for_a_caught_problem(tmp_path: Path) -> None:
@@ -380,6 +455,16 @@ def test_an_incomplete_review_isnt_counted_as_one_without_false_alarms(tmp_path:
         1.0,
         1,
     )
+
+
+def test_with_every_clean_review_incomplete_the_clean_measure_is_unknown(
+    tmp_path: Path,
+) -> None:
+    # 0 would read as meeting "1 or fewer"; nothing was measured.
+    runs = [CaseRun(load_case(write_case(tmp_path, "stopped", spec=CLEAN)), 1, None, "t", 9)]
+    assert score(runs).most_clean_comments is None
+    report = render_report(summarize(runs, 1), runs, settings_line="s")
+    assert "| Most comments on a clean pull request | 1 or fewer | n/a | n/a | n/a |" in report
 
 
 def test_a_slow_small_review_is_over_its_time_target(tmp_path: Path) -> None:
@@ -475,6 +560,7 @@ def test_the_results_hold_every_review_in_full(tmp_path: Path) -> None:
     (found,) = review["findings"]
     assert found["finding"] == fingerprint(finding(4))
     assert (found["near_line"], found["verdict"], found["read"]) == (4, "same problem", False)
+    assert found["catches"] is True
     assert review["result"]["findings"]["kept"][0]["explanation"] == finding(4).explanation
 
 
@@ -605,6 +691,9 @@ def test_the_eval_command_writes_the_report_sheet_and_results(
     assert (out / "review-sheet.md").exists()
     results = json.loads((out / "results.json").read_text(encoding="utf-8"))
     assert results["reviews"][0]["case"] == "c"
+    assert results["version"] == __version__  # a new evaluation records the running version
+    report = (out / "report.md").read_text(encoding="utf-8")
+    assert report.splitlines()[2].startswith(f"pr-review-agent {__version__} with")
     captured = capsys.readouterr()
     assert "| Catch rate | 60% or more | 100%" in captured.out
     assert f"written to {out}" in captured.err
@@ -886,6 +975,16 @@ def test_scoring_again_needs_the_full_results_of_these_cases(
         (out / "results.json").write_text(content, encoding="utf-8")
     with pytest.raises(SetupError, match=message):
         load_results(out, load_cases(tmp_path / "cases"))
+
+
+def test_results_that_arent_utf8_are_named(tmp_path: Path) -> None:
+    cases = tmp_path / "cases"
+    write_evaluation(tmp_path / "out", [case_run(cases, finding(4))], runs=1, settings_line="s")
+    path = tmp_path / "out" / "results.json"
+    path.write_text(path.read_text(encoding="utf-8"), encoding="utf-16")
+    with pytest.raises(SetupError, match="isn't UTF-8 text") as caught:
+        load_results(tmp_path / "out", load_cases(cases))
+    assert (str(path) in caught.value.problem, caught.value.fix) == (True, "Save it as UTF-8.")
 
 
 def _drop_seconds(data: dict[str, Any]) -> None:

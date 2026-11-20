@@ -287,6 +287,7 @@ def results_json(
                         "severity": match.finding.severity,
                         "status": match.finding.status,
                         "near_line": match.near.first_line if match.near else None,
+                        "catches": match.catches,
                         "verdict": match.verdict,
                         "read": match.reading is not None,
                     }
@@ -329,6 +330,8 @@ def load_results(folder: Path, cases: tuple[Case, ...]) -> Finished:
         )
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError:
+        raise SetupError(f"{path} isn't UTF-8 text.", "Save it as UTF-8.") from None
     except json.JSONDecodeError as error:
         raise SetupError(f"{path} isn't valid JSON: {error}", "Run the evaluation again.") from None
     if not isinstance(data, dict) or data.get("format") != RESULTS_FORMAT:

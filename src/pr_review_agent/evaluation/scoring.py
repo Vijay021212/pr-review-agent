@@ -77,19 +77,22 @@ def match_findings(
 ) -> list[Match]:
     """The findings by file and line, each with the planted problem it catches, if any.
 
-    Each planted problem is caught by one finding at most: of the findings within 3 lines
-    that may describe it, one read as the same problem before one not read yet, then the
-    nearest, then the first. A finding read as anything else never takes it, so it can't keep
-    a later finding that describes the problem from catching it (7.1).
+    A finding is near the closest planted problem within 3 lines, and can catch only that
+    one. Each planted problem is caught by one finding at most: of the findings near it that
+    may describe it, one read as the same problem before one not read yet, then the nearest,
+    then the first. A finding read as anything else never takes it, so it can't keep a later
+    finding that describes the problem from catching it (7.1). With two planted problems
+    within 6 lines of each other, a finding counts only for the nearer one.
     """
     ordered = sorted(findings, key=lambda f: (f.file, f.line))
     read = [readings.of(case.name, finding) for finding in ordered]
+    near = [_nearest(case, finding) for finding in ordered]
     caught: dict[int, Located] = {}  # a finding's place in `ordered` -> the problem it catches
     for problem in case.problems:
         candidates = [
             index
-            for index, finding in enumerate(ordered)
-            if index not in caught and _is_near(problem, finding) and _may_describe(read[index])
+            for index in range(len(ordered))
+            if near[index] is problem and _may_describe(read[index])
         ]
         if candidates:
             best = min(
@@ -97,25 +100,31 @@ def match_findings(
                 key=lambda i: (read[i] is None, _distance(problem, ordered[i].line), i),
             )
             caught[best] = problem
-    matches = []
-    for index, finding in enumerate(ordered):
-        near = [p for p in case.problems if _is_near(p, finding)]
-        catch = caught.get(index)
-        matches.append(
-            Match(
-                finding,
-                catch,
-                exact=catch is not None and _distance(catch, finding.line) == 0,
-                reading=read[index],
-                near=min(near, key=lambda p: _distance(p, finding.line)) if near else None,
-            )
+    return [
+        Match(
+            finding,
+            caught.get(index),
+            exact=index in caught and _distance(caught[index], finding.line) == 0,
+            reading=read[index],
+            near=near[index],
         )
-    return matches
+        for index, finding in enumerate(ordered)
+    ]
 
 
-def _is_near(problem: Located, finding: Finding) -> bool:
-    same_file = problem.problem.file == finding.file
-    return same_file and _distance(problem, finding.line) <= MATCH_DISTANCE
+def _nearest(case: Case, finding: Finding) -> Located | None:
+    """The planted problem within 3 lines of the finding that's closest to it, if any; of two
+    at the same distance, the one that starts first. It's the one the review sheet names,
+    so the one a reading of the finding is about: a finding can catch no other."""
+    near = [
+        problem
+        for problem in case.problems
+        if problem.problem.file == finding.file
+        and _distance(problem, finding.line) <= MATCH_DISTANCE
+    ]
+    if not near:
+        return None
+    return min(near, key=lambda p: (_distance(p, finding.line), p.first_line))
 
 
 def _may_describe(reading: Reading | None) -> bool:
