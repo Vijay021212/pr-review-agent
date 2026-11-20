@@ -1,5 +1,6 @@
 {
   "format": 2,
+  "version": "0.3.0.dev0",
   "settings": "context 16384 tokens, up to 10 explore steps, 20-minute limit",
   "runs": 3,
   "reviews": [
