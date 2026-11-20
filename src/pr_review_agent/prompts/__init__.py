@@ -12,8 +12,8 @@ Pull request text and code go into the user message inside `data_block()` marker
 prompt tells the model that what's inside them is data to review, never instructions
 (design section 7, NFR-5). A small model can follow such text anyway, so the passages of a
 pull request that address the reviewer, which the screen stage quotes, are also left out of
-what the later stages read: of its own text with `leave_out()`, and of the code with
-`leave_out_comments()`, which only ever touches a line that is only a comment.
+what the later stages read: of its own text with `leave_out()`, while the comments the
+screen picks are hidden in the code by their place (`comments.py`).
 """
 
 from __future__ import annotations
@@ -111,7 +111,8 @@ def leave_out(text: str, passages: tuple[str, ...]) -> str:
     The passages are the sentences that tell the reviewer what to do or conclude, as the
     screen stage quoted them. Each is found word for word, whatever the spaces and line
     breaks between its words; a quote that isn't in the text changes nothing, so nothing is
-    ever removed on the model's word alone. Never use it on code: `leave_out_comments()`.
+    ever removed on the model's word alone. Never use it on code, which a passage could
+    repeat: the code hides comments by their place (`stages.screen.hide_comments()`).
     """
     for passage in passages:
         pattern = _words_of(passage)
@@ -120,39 +121,20 @@ def leave_out(text: str, passages: tuple[str, ...]) -> str:
     return text
 
 
-# A line that is only a comment, in the common languages: `#`, `//`, `/* ... */`, `*`, `--`.
-# After `#`, `*` and `--` a space must follow, as it does in comments, so that lines of code
-# that start with them, like `*ptr = 1;`, `--count;`, `*rest, last = parts` or `#define`,
-# are never taken for comments (#109).
-COMMENT_LINE = re.compile(
-    r"^\s*(?:(?:#+|\*+|--+)(?:\s+|$)|(?://+|/\*+)\s*)(?P<text>.*?)\s*(?:\*+/)?\s*$"
-)
-# How a line of code looks in what the model reads, before the code itself: a line of the
-# numbered diff ("    12 + ", or six spaces for a removed line: "       - "), a numbered
-# line of a file ("    12  ") or a search match ("src/a.py:12: ").
-_VIEW_PREFIX = re.compile(r"(?: *\d+| {6}) [+\- ] | *\d+  |[^\s:][^:\n]*:\d+: ")
+MIN_SENTENCE_WORDS = 3  # a shorter sentence could be in the text by chance
 
 
-def leave_out_comments(code: str, passages: tuple[str, ...]) -> str:
-    """`code`, as the model reads it, with each comment line whose whole text is one of the
-    passages replaced by a note that it was left out (NFR-5, #82).
-
-    Only a line that is only a comment can be left out, and only all of its text: its line
-    number and comment marker stay, and a line of code never changes, even when a passage's
-    words are in it, so a comment that repeats a line of code can't hide that line (#109).
-    """
-    wanted = {" ".join(passage.split()) for passage in passages}
-    if not wanted:
-        return code
-    lines = code.split("\n")
-    for index, line in enumerate(lines):
-        prefix = _VIEW_PREFIX.match(line)
-        start = prefix.end() if prefix else 0
-        comment = COMMENT_LINE.match(line[start:])
-        if comment and " ".join(comment["text"].split()) in wanted:
-            first, last = comment.span("text")
-            lines[index] = line[: start + first] + LEFT_OUT + line[start + last :]
-    return "\n".join(lines)
+def leave_out_each_sentence(text: str, passages: tuple[str, ...]) -> str:
+    """Text the model wrote from the pull request's text, like the understanding's goal,
+    with each passage left out, and each sentence of a passage on its own too: a goal of one
+    or two sentences can repeat one sentence of a longer order (#109)."""
+    sentences = tuple(
+        sentence
+        for passage in passages
+        for sentence in re.split(r"(?<=[.!?])\s+", passage.strip())
+        if len(sentence.split()) >= MIN_SENTENCE_WORDS
+    )
+    return leave_out(text, (*passages, *sentences))
 
 
 def _words_of(passage: str) -> re.Pattern[str] | None:

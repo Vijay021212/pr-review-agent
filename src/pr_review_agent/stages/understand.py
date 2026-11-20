@@ -67,17 +67,37 @@ def _has_stated_goal(pull_request: PullRequest) -> bool:
 
 
 def _named_risks(parts: tuple[str, ...], changed: set[str]) -> tuple[str, ...]:
-    """The risky parts, each naming its file. The model sometimes writes a changed file and
-    what could break in it as two items, so the summary listed the file's bare name as a
-    risk of its own (#109): such a name is joined to the item after it, and dropped when
-    nothing follows it."""
+    """The risky parts, each naming its file where that's clear.
+
+    The model sometimes writes a changed file and what could break in it as two items, so
+    the summary listed the file's bare name as a risk of its own (#109). One bare name is
+    joined to the item after it, unless that item names its own file, and dropped when
+    nothing follows it. Two or more in a row stay as written: which risk is whose isn't
+    clear then, and a wrong label is worse than a bare name.
+    """
     joined: list[str] = []
-    named: str | None = None  # a bare file name waiting for its risk
+    names: list[tuple[str, str]] = []  # bare file names waiting for their risk: (name, as written)
     for part in parts:
-        bare = part.strip().strip("`").strip().removesuffix(":").strip("`").strip()
-        if bare in changed:
-            named = bare
+        name = _bare_name(part)
+        if name in changed:
+            names.append((name, part))
             continue
-        joined.append(f"`{named}`: {part}" if named else part)
-        named = None
+        if len(names) == 1 and not _names_a_file(part, changed):
+            joined.append(f"`{names[0][0]}`: {part}")
+        else:
+            joined += [written for _, written in names if len(names) > 1]
+            joined.append(part)
+        names = []
+    joined += [written for _, written in names if len(names) > 1]
     return tuple(joined)
+
+
+def _bare_name(part: str) -> str:
+    """The item without spaces, backticks and a colon after it: a file name, if it's one."""
+    return part.strip().strip("`").strip().removesuffix(":").strip("`").strip()
+
+
+def _names_a_file(part: str, changed: set[str]) -> bool:
+    """Whether the item starts by naming a changed file, like "src/b.py: the totals change"."""
+    head = part.strip().split(":", 1)[0]
+    return ":" in part and _bare_name(head) in changed

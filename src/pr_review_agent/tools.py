@@ -14,9 +14,11 @@ review, so the agent can correct itself and carry on.
 from __future__ import annotations
 
 import os
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from pr_review_agent.comments import hide
 from pr_review_agent.domain import ToolAction
 
 MAX_ENTRIES = 200
@@ -41,8 +43,11 @@ class ToolRefused(Exception):
 
 
 class ReadOnlyTools:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, hidden: Mapping[str, Collection[int]] | None = None) -> None:
         self.root = root.resolve()
+        # The comment lines the screen left out, by file: hidden in every file the tools
+        # read, before a search matches, so no view shows them (#109).
+        self.hidden = dict(hidden or {})
 
     def run(self, action: ToolAction, target: str = "", start_line: int = 1) -> ToolResult:
         """Carry out one tool call. A refused or failed call becomes a message, not an error."""
@@ -78,7 +83,7 @@ class ReadOnlyTools:
         text = _read_text(file)
         if text is None:
             raise ToolRefused(f"{_shown(path)} is a binary file")
-        lines = text.splitlines()
+        lines = self._lines(file, text)
         start = max(1, start_line)
         if lines and start > len(lines):
             raise ToolRefused(f"{_shown(path)} has only {len(lines)} lines")
@@ -99,7 +104,7 @@ class ReadOnlyTools:
             content = _read_text(file, MAX_SEARCH_FILE_BYTES)
             if content is None:
                 continue
-            for number, line in enumerate(content.splitlines(), start=1):
+            for number, line in enumerate(self._lines(file, content), start=1):
                 if text in line:
                     shown = line.strip()[:MAX_LINE_CHARS]
                     matches.append(f"{self._relative(file)}:{number}: {shown}")
@@ -136,6 +141,10 @@ class ReadOnlyTools:
 
     def _relative(self, path: Path) -> str:
         return path.relative_to(self.root).as_posix()
+
+    def _lines(self, file: Path, text: str) -> list[str]:
+        path = self._relative(file)
+        return hide(path, text.splitlines(), self.hidden.get(path, ()))
 
 
 def normalize_path(path: str) -> str:

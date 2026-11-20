@@ -45,7 +45,7 @@ from pr_review_agent.stages.fetch import fetch
 from pr_review_agent.stages.find import PASSES, find_problems
 from pr_review_agent.stages.preflight import preflight
 from pr_review_agent.stages.publish import publish
-from pr_review_agent.stages.screen import screen
+from pr_review_agent.stages.screen import hide_comments, screen
 from pr_review_agent.stages.understand import understand
 from pr_review_agent.stages.verify import verify
 from pr_review_agent.version import __version__
@@ -156,20 +156,32 @@ def _run_stages(
         _record_calls(run_log, "understand", [call])
         calls.append(call)
     with stages.run("screen", "Looking for text that tells the reviewer what to do"):
-        passages, call = screen(pull_request, scope, model, deadline)
+        screened, call = screen(pull_request, scope, model, deadline)
         _record_calls(run_log, "screen", [call])
         calls.append(call)
-        if passages:
-            run_log.record("left out of the review", passages=list(passages))
-        understanding = understanding.model_copy(update={"addressed_to_reviewer": passages})
+        if screened.passages:
+            run_log.record(
+                "left out of the review",
+                passages=list(screened.passages),
+                lines=[f"{path}:{line}" for path, line in screened.lines],
+            )
+        understanding = understanding.model_copy(
+            update={
+                "addressed_to_reviewer": screened.passages,
+                "left_out_lines": screened.lines,
+            }
+        )
+    # What the later stages review: the same pull request, with the comments the screen left
+    # out hidden in its diff. The review's record keeps the pull request as it is.
+    reviewed, reviewed_scope = hide_comments(pull_request, scope, screened.lines)
     # The snapshot stays until the review ends, and is removed even when a stage fails.
     with ExitStack() as cleanup:
         with stages.run("snapshot", "Downloading the repository at the reviewed commit"):
             root = cleanup.enter_context(snapshot(components.github, pull_request, deadline))
         with stages.run("explore", "Exploring related code"):
             explored, explore_calls = explore(
-                pull_request,
-                scope,
+                reviewed,
+                reviewed_scope,
                 understanding,
                 model,
                 deadline,
@@ -185,7 +197,13 @@ def _run_stages(
             for finding_pass in PASSES:
                 log.info("Pass: %s...", finding_pass.focus)
                 found = find_problems(
-                    finding_pass, pull_request, scope, understanding, explored, model, deadline
+                    finding_pass,
+                    reviewed,
+                    reviewed_scope,
+                    understanding,
+                    explored,
+                    model,
+                    deadline,
                 )
                 _record_calls(run_log, "find", found.calls)
                 calls += found.calls
@@ -195,7 +213,7 @@ def _run_stages(
             findings, verify_calls = verify(
                 tuple(kept),
                 tuple(dropped),
-                pull_request,
+                reviewed,
                 understanding,
                 explored,
                 root,

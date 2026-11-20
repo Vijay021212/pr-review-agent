@@ -442,10 +442,13 @@ class Understanding(UnderstandingAnswer):
 
     # Stored, it may be left out: other code and results saved before still load.
     risky_parts: tuple[NonEmptyStr, ...] = ()
-    # Sentences of the pull request's text that tell the reviewer, or an AI, what to do or
-    # what to conclude, quoted exactly by the screen stage; left out of what the finding
-    # passes read (NFR-5).
+    # Sentences of the pull request's text, and comments its code adds, that tell the
+    # reviewer, or an AI, what to do or what to conclude, quoted exactly by the screen stage;
+    # left out of what every later stage reads (NFR-5).
     addressed_to_reviewer: tuple[NonEmptyStr, ...] = ()
+    # Where those comments are, as (file, line at the reviewed commit): every view of the
+    # code hides these lines, and only these (#109).
+    left_out_lines: tuple[tuple[NonEmptyStr, int], ...] = ()
 
 
 class ToolCall(_Frozen):
