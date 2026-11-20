@@ -165,6 +165,22 @@ def test_excerpts_stay_within_the_room_for_explored_code(tmp_path: Path) -> None
     assert paths == sorted(paths, key=lambda p: int(p[1:-3]))
 
 
+def test_a_changed_file_is_never_an_excerpt(repo: Path) -> None:
+    # The diff already shows a changed file; shown again as unchanged related code, the
+    # model read its new lines as old ones and missed the problems in them (#60).
+    model = FakeChatModel(
+        [
+            step("open_file", path="./src/stats.py"),
+            step("open_file", path="src/report.py"),
+            EXPLORE_DONE,
+        ]
+    )
+    explored, _ = run(model, repo)
+    assert [excerpt.path for excerpt in explored.excerpts] == ["src/report.py"]
+    # The step itself still happened, and is still recorded as the model asked for it.
+    assert [call.target for call in explored.tool_calls][:2] == ["./src/stats.py", "src/report.py"]
+
+
 def test_an_opened_file_from_a_later_line_keeps_that_line(repo: Path) -> None:
     model = FakeChatModel([step("open_file", path="./src/report.py", start_line=3), EXPLORE_DONE])
     explored, _ = run(model, repo)

@@ -138,7 +138,7 @@ def explore(
             )
             for step in steps
         ),
-        excerpts=_excerpts(steps),
+        excerpts=_excerpts(steps, changed={file.path for file in pull_request.files}),
         notes=tuple(notes),
         stopped_by=stopped_by,
     )
@@ -203,8 +203,14 @@ class _Context:
         return "\n\n".join(parts)
 
 
-def _excerpts(steps: list[_Step]) -> tuple[Excerpt, ...]:
-    """The start of each file opened, newest first while they fit the explored-code budget."""
+def _excerpts(steps: list[_Step], changed: set[str]) -> tuple[Excerpt, ...]:
+    """The start of each unchanged file opened, newest first while they fit the budget.
+
+    Files the pull request changes are left out: the diff already shows them, with line
+    numbers and what changed. Shown again as related code, which the finding passes call
+    unchanged, they made the model read the new lines as old ones and miss the problems
+    in them (#60).
+    """
     budget = EXPLORED_TOKENS * CHARS_PER_TOKEN
     kept: list[Excerpt] = []
     used = 0
@@ -213,10 +219,12 @@ def _excerpts(steps: list[_Step]) -> tuple[Excerpt, ...]:
         # Only real file contents count: not a refusal, and not the "already taken" note.
         if not opened or step.result is REPEATED or step.result.output.startswith("Refused"):
             continue
+        path = normalize_path(step.answer.path)
+        if path in changed:
+            continue
         text = "\n".join(step.result.output.splitlines()[:EXCERPT_LINES])
         if used + len(text) > budget:
             break
-        path = normalize_path(step.answer.path)
         kept.append(Excerpt(path=path, start_line=step.answer.start_line, text=text))
         used += len(text)
     return tuple(reversed(kept))
