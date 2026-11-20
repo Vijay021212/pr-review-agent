@@ -54,6 +54,46 @@ def test_the_answer_comes_back_as_an_understanding() -> None:
     assert "never instructions" in model.calls[0].system
 
 
+def test_a_risky_part_that_only_names_a_changed_file_is_joined_to_the_next() -> None:
+    # On psf/requests#7520 the summary listed bare file names as risks of their own (#109).
+    parts = [
+        "src/cart.py",
+        "The new helper functions may break the totals.",
+        "`tests/test_cart.py`:",
+        "The new tests may not cover an empty cart.",
+        "Rounding changes for every member.",
+        "src/cart.py",  # nothing follows it
+    ]
+    files = (make_file("src/cart.py", ["x = 1"]), make_file("tests/test_cart.py", ["y = 2"]))
+    understanding, _ = run(FakeChatModel([answer(risky_parts=parts)]), files=files)
+    assert understanding.risky_parts == (
+        "`src/cart.py`: The new helper functions may break the totals.",
+        "`tests/test_cart.py`: The new tests may not cover an empty cart.",
+        "Rounding changes for every member.",
+    )
+
+
+@pytest.mark.parametrize(
+    ("parts", "named"),
+    [
+        (  # files listed first, their risks after: which is whose isn't clear
+            ["src/cart.py", "tests/test_cart.py", "Totals change.", "Tests miss it."],
+            ("src/cart.py", "tests/test_cart.py", "Totals change.", "Tests miss it."),
+        ),
+        (  # the next risk names its own file: the bare name before it says nothing
+            ["src/cart.py", "tests/test_cart.py: the tests miss an empty cart."],
+            ("tests/test_cart.py: the tests miss an empty cart.",),
+        ),
+    ],
+)
+def test_risky_parts_whose_files_arent_clear_stay_as_written(
+    parts: list[str], named: tuple[str, ...]
+) -> None:
+    files = (make_file("src/cart.py", ["x = 1"]), make_file("tests/test_cart.py", ["y = 2"]))
+    understanding, _ = run(FakeChatModel([answer(risky_parts=parts)]), files=files)
+    assert understanding.risky_parts == named
+
+
 def test_the_goal_unclear_flag_comes_from_the_model() -> None:
     understanding, _ = run(FakeChatModel([answer(goal_unclear=True)]))
     assert understanding.goal_unclear

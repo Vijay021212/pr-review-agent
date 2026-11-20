@@ -16,6 +16,7 @@ before the model cost nothing, so they save model calls.
 from __future__ import annotations
 
 import re
+from collections.abc import Collection, Mapping
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,6 +27,7 @@ from pr_review_agent.anchoring import (
     drop_style_noise,
     remove_duplicates,
 )
+from pr_review_agent.comments import hidden_by_file, hide
 from pr_review_agent.diff_text import render_file
 from pr_review_agent.domain import (
     ChangedFile,
@@ -42,7 +44,7 @@ from pr_review_agent.domain import (
     Side,
     Understanding,
 )
-from pr_review_agent.prompts import data_block, leave_out, load, severity_definitions
+from pr_review_agent.prompts import data_block, load, severity_definitions
 from pr_review_agent.stages import ModelCall, ask, review_context
 from pr_review_agent.tools import ReadOnlyTools, ToolRefused, normalize_path
 
@@ -53,7 +55,7 @@ PLACES_PER_FINDING = 2  # other places a finding names whose code is shown
 PLACE_LINES_AROUND = 6  # lines shown before and after each of them
 SERIOUS = (Severity.CRITICAL, Severity.HIGH)
 NOTE_START = " (The double-check "  # how its notes on a severity reason begin
-OWN_WORDS = 4  # a severity reason with fewer words of its own only repeats the definitions
+OWN_WORDS = 4  # a reason that repeats a definition needs this many words of its own besides
 NO_REASON = "No reason of its own was given (the model repeated the severity definitions)."
 
 
@@ -87,7 +89,7 @@ def verify(
     anchored = anchor_all(findings, pull_request.files)
     failures = drop_no_failure(anchored.kept)
     context = review_context(pull_request, understanding, explored)
-    passages = understanding.addressed_to_reviewer
+    hidden = hidden_by_file(understanding.left_out_lines)
     by_path = {file.path: file for file in pull_request.files}
     prompt = load("verify")
     kept: list[Finding] = []
@@ -96,7 +98,7 @@ def verify(
     for start in range(0, len(failures.kept), FINDINGS_PER_CALL):
         group = failures.kept[start : start + FINDINGS_PER_CALL]
         deadline.check("the double-check")
-        message = build_message(group, context, by_path, root, passages)
+        message = build_message(group, context, by_path, root, hidden)
         answer, call = ask(model, prompt, message, VerifyAnswer, deadline)
         calls.append(call)
         decisions = {decision.number: decision for decision in answer.decisions}
@@ -125,9 +127,15 @@ def build_message(
     context: list[str],
     files: dict[str, ChangedFile],
     root: Path,
-    passages: tuple[str, ...] = (),
+    hidden: Mapping[str, Collection[int]] | None = None,
 ) -> str:
-    """The context the finding passes had, then each finding with the code it's about."""
+    """The context the finding passes had, then each finding with the code it's about.
+
+    `files` are the pull request's files as the later stages review them, with the comments
+    the screen left out hidden in their diffs, and `hidden` says which lines they are, so
+    the code read from the snapshot hides them too (#109).
+    """
+    hidden = hidden or {}
     parts = [*context, "## The findings to check"]
     for number, finding in enumerate(group, start=1):
         text = "\n".join(
@@ -149,7 +157,7 @@ def build_message(
             ]
         )
         parts += [f"## Finding {number}", data_block(f"FINDING {number}", text)]
-        code = leave_out(_code_around(root, finding), passages)
+        code = _code_around(root, finding, hidden)
         if code:
             parts += [
                 f"Code around line {finding.line} at the reviewed commit:",
@@ -159,25 +167,27 @@ def build_message(
         if file is not None:
             parts += [
                 "The change near it:",
-                data_block(f"DIFF {number}", leave_out(_diff_around(file, finding), passages)),
+                data_block(f"DIFF {number}", _diff_around(file, finding)),
             ]
-        for place, code in _places(root, finding):
+        for place, code in _places(root, finding, hidden):
             parts += [
                 f"Code at {place}, which the finding says it affects:",
-                data_block(f"PLACE {number}", leave_out(code, passages)),
+                data_block(f"PLACE {number}", code),
             ]
     parts.append(f"Give a decision for each of the {len(group)} findings above.")
     return "\n\n".join(parts)
 
 
-def _places(root: Path, finding: Finding) -> list[tuple[str, str]]:
+def _places(
+    root: Path, finding: Finding, hidden: Mapping[str, Collection[int]]
+) -> list[tuple[str, str]]:
     """The code around the other places a finding names ("path:line"), for the first few.
 
     The places are the model's words, so they're read through the read-only tools: a place
     outside the repository, through a link, or that isn't a text file is refused and left
     out. A place already inside the code shown around the finding's line is left out too.
     """
-    tools = ReadOnlyTools(root)
+    tools = ReadOnlyTools(root, hidden)
     shown = []
     for place in finding.affected_places[:PLACES_PER_FINDING]:
         path, _, number = place.rpartition(":")
@@ -196,12 +206,13 @@ def _places(root: Path, finding: Finding) -> list[tuple[str, str]]:
     return shown
 
 
-def _code_around(root: Path, finding: Finding) -> str:
+def _code_around(root: Path, finding: Finding, hidden: Mapping[str, Collection[int]]) -> str:
     """Numbered lines of the reviewed file around the finding, or "" for removed code."""
     path = root / finding.file
     if finding.side is Side.OLD or not path.is_file():
         return ""
-    lines = path.read_bytes().decode("utf-8", errors="replace").splitlines()
+    text = path.read_bytes().decode("utf-8", errors="replace")
+    lines = hide(finding.file, text.splitlines(), hidden.get(finding.file, ()))
     first = max(1, finding.line - CODE_LINES_AROUND)
     last = min(len(lines), finding.line + CODE_LINES_AROUND)
     return "\n".join(f"{number:>6}  {lines[number - 1]}" for number in range(first, last + 1))
@@ -268,13 +279,16 @@ def _own_reason(finding: Finding) -> Finding:
     Every finding gives the reason for its severity (requirements 5.2), but the model
     sometimes answers with a definition copied from the prompt, often the Critical one on a
     High finding, so the comment would claim harm that has nothing to do with the change
-    (#86). With the definitions and examples taken out, a reason needs a few words of its
-    own; if it hasn't, it's replaced by a plain note. A note the double-check added stays.
+    (#86). A reason that repeats a definition or an example needs a few words of its own
+    besides; if it hasn't, it's replaced by a plain note. A short reason that repeats none,
+    like "SQL injection vulnerability", is the model's own and stays (#109). A note the
+    double-check added stays too.
     """
     reason, note, rest = finding.severity_reason.partition(NOTE_START)
     remaining = reason
     for sentence in severity_definitions():
         remaining = re.sub(re.escape(sentence), " ", remaining, flags=re.IGNORECASE)
-    if len(re.findall(r"[A-Za-z0-9_']+", remaining)) >= OWN_WORDS:
+    repeats_a_definition = remaining != reason
+    if not repeats_a_definition or len(re.findall(r"[A-Za-z0-9_']+", remaining)) >= OWN_WORDS:
         return finding
     return finding.model_copy(update={"severity_reason": NO_REASON + note + rest})

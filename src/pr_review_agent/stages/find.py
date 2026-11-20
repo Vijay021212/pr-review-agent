@@ -25,7 +25,7 @@ from pr_review_agent.domain import (
     ReviewScope,
     Understanding,
 )
-from pr_review_agent.prompts import data_block, leave_out, load
+from pr_review_agent.prompts import data_block, load
 from pr_review_agent.stages import ModelCall, ask, review_context
 
 
@@ -124,12 +124,11 @@ def build_message(
     explored: ExploredContext,
     batch: tuple[ChangedFile, ...],
 ) -> str:
-    # The context the double-check gets too, then the changes; a comment the change adds that
-    # tells the reviewer what to do is left out of them (NFR-5).
+    # The context the double-check gets too, then the changes, in which the comments that
+    # tell the reviewer what to do are already hidden (NFR-5, `screen.hide_comments()`).
     parts = review_context(pull_request, understanding, explored)
     diff = "\n\n".join(render_file(file) for file in batch)
-    passages = understanding.addressed_to_reviewer
-    parts += ["## The changes to review", data_block("DIFF", leave_out(diff, passages))]
+    parts += ["## The changes to review", data_block("DIFF", diff)]
     return "\n\n".join(parts)
 
 

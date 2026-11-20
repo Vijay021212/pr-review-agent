@@ -17,6 +17,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from pr_review_agent.comments import hidden_by_file
 from pr_review_agent.diff_text import CHARS_PER_TOKEN
 from pr_review_agent.domain import (
     ChatModel,
@@ -32,9 +33,15 @@ from pr_review_agent.domain import (
     Understanding,
 )
 from pr_review_agent.project_map import build_project_map
-from pr_review_agent.prompts import clip, data_block, leave_out, load
+from pr_review_agent.prompts import clip, data_block, load
 from pr_review_agent.selection import EXPLORED_TOKENS
-from pr_review_agent.stages import ModelCall, ask, changed_files_list, most_important_diff
+from pr_review_agent.stages import (
+    ModelCall,
+    ask,
+    changed_files_list,
+    most_important_diff,
+    understanding_block,
+)
 from pr_review_agent.tools import ReadOnlyTools, ToolResult, normalize_path
 
 TIME_SHARE = 0.35  # exploring may use this share of the time limit; finding needs the rest
@@ -91,7 +98,7 @@ def explore(
     *,
     max_steps: int,
 ) -> tuple[ExploredContext, tuple[ModelCall, ...]]:
-    tools = ReadOnlyTools(root)
+    tools = ReadOnlyTools(root, hidden_by_file(understanding.left_out_lines))
     project_map = build_project_map(root)
     prompt = load("explore")
     explore_until = deadline.elapsed() + deadline.seconds * TIME_SHARE
@@ -169,14 +176,12 @@ class _Context:
     notes: list[str]
 
     def message(self, number: int, max_steps: int) -> str:
-        understanding = self.understanding
-        # What the pull request tells the reviewer to do is left out of the code shown (NFR-5).
-        passages = understanding.addressed_to_reviewer
+        # What the pull request tells the reviewer to do is left out of what's shown (NFR-5):
+        # of the goal and summary here, and of the code, by place, in the diff and in the
+        # files the tools read (`screen.hide_comments()`, `ReadOnlyTools`).
         parts = [
             "## What the pull request is for (written in an earlier step)",
-            data_block(
-                "UNDERSTANDING", f"Goal: {understanding.goal}\nSummary: {understanding.summary}"
-            ),
+            understanding_block(self.understanding),
             "## Changed files",
             changed_files_list(self.pull_request, self.scope),
         ]
@@ -184,7 +189,7 @@ class _Context:
         if diff:
             parts += [
                 "## Diff of the most important files",
-                data_block("DIFF", clip(leave_out(diff, passages), DIFF_CHARS)),
+                data_block("DIFF", clip(diff, DIFF_CHARS)),
             ]
         parts += ["## Project map", data_block("PROJECT MAP", clip(self.project_map, MAP_CHARS))]
         if self.steps:
@@ -199,7 +204,7 @@ class _Context:
             last = self.steps[-1]
             parts += [
                 f"## Result of the last step ({last.answer.action} {last.target!r})",
-                data_block("RESULT", clip(leave_out(last.result.output, passages), RESULT_CHARS)),
+                data_block("RESULT", clip(last.result.output, RESULT_CHARS)),
             ]
         parts.append(f"This is step {number} of at most {max_steps}. Choose the next step.")
         return "\n\n".join(parts)

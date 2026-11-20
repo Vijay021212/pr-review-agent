@@ -39,6 +39,9 @@ def understand(
         model, load("understand"), build_message(pull_request, scope), UnderstandingAnswer, deadline
     )
     understanding = Understanding.model_validate(answer.model_dump())
+    changed = {file.path for file in pull_request.files}
+    risky = _named_risks(understanding.risky_parts, changed)
+    understanding = understanding.model_copy(update={"risky_parts": risky})
     if not _has_stated_goal(pull_request):
         # Nothing was written down, so the goal can only have come from the code (FR-2),
         # whatever the model says.
@@ -61,3 +64,40 @@ def build_message(pull_request: PullRequest, scope: ReviewScope) -> str:
 
 def _has_stated_goal(pull_request: PullRequest) -> bool:
     return bool(pull_request.description.strip() or pull_request.linked_issues)
+
+
+def _named_risks(parts: tuple[str, ...], changed: set[str]) -> tuple[str, ...]:
+    """The risky parts, each naming its file where that's clear.
+
+    The model sometimes writes a changed file and what could break in it as two items, so
+    the summary listed the file's bare name as a risk of its own (#109). One bare name is
+    joined to the item after it, unless that item names its own file, and dropped when
+    nothing follows it. Two or more in a row stay as written: which risk is whose isn't
+    clear then, and a wrong label is worse than a bare name.
+    """
+    joined: list[str] = []
+    names: list[tuple[str, str]] = []  # bare file names waiting for their risk: (name, as written)
+    for part in parts:
+        name = _bare_name(part)
+        if name in changed:
+            names.append((name, part))
+            continue
+        if len(names) == 1 and not _names_a_file(part, changed):
+            joined.append(f"`{names[0][0]}`: {part}")
+        else:
+            joined += [written for _, written in names if len(names) > 1]
+            joined.append(part)
+        names = []
+    joined += [written for _, written in names if len(names) > 1]
+    return tuple(joined)
+
+
+def _bare_name(part: str) -> str:
+    """The item without spaces, backticks and a colon after it: a file name, if it's one."""
+    return part.strip().strip("`").strip().removesuffix(":").strip("`").strip()
+
+
+def _names_a_file(part: str, changed: set[str]) -> bool:
+    """Whether the item starts by naming a changed file, like "src/b.py: the totals change"."""
+    head = part.strip().split(":", 1)[0]
+    return ":" in part and _bare_name(head) in changed

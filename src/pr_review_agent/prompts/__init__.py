@@ -11,8 +11,9 @@ it, so bump those prompts' versions too.
 Pull request text and code go into the user message inside `data_block()` markers. Every
 prompt tells the model that what's inside them is data to review, never instructions
 (design section 7, NFR-5). A small model can follow such text anyway, so the passages of a
-pull request that address the reviewer are also left out of what the finding passes read
-(`leave_out()`).
+pull request that address the reviewer, which the screen stage quotes, are also left out of
+what the later stages read: of its own text with `leave_out()`, while the comments the
+screen picks are hidden in the code by their place (`comments.py`).
 """
 
 from __future__ import annotations
@@ -104,18 +105,36 @@ def appears_in(passage: str, text: str) -> bool:
 
 
 def leave_out(text: str, passages: tuple[str, ...]) -> str:
-    """`text` with each passage replaced by a note that it was left out (NFR-5).
+    """The pull request's own text (its title, its description, or text the model wrote
+    from them) with each passage replaced by a note that it was left out (NFR-5).
 
-    The passages are the sentences of a pull request that tell the reviewer what to do or
-    conclude, as the understand stage quoted them. Each is found word for word, whatever
-    the spaces and line breaks between its words; a quote that isn't in the text changes
-    nothing, so nothing is ever removed on the model's word alone.
+    The passages are the sentences that tell the reviewer what to do or conclude, as the
+    screen stage quoted them. Each is found word for word, whatever the spaces and line
+    breaks between its words; a quote that isn't in the text changes nothing, so nothing is
+    ever removed on the model's word alone. Never use it on code, which a passage could
+    repeat: the code hides comments by their place (`stages.screen.hide_comments()`).
     """
     for passage in passages:
         pattern = _words_of(passage)
         if pattern is not None:
             text = pattern.sub(lambda _: LEFT_OUT, text)
     return text
+
+
+MIN_SENTENCE_WORDS = 3  # a shorter sentence could be in the text by chance
+
+
+def leave_out_each_sentence(text: str, passages: tuple[str, ...]) -> str:
+    """Text the model wrote from the pull request's text, like the understanding's goal,
+    with each passage left out, and each sentence of a passage on its own too: a goal of one
+    or two sentences can repeat one sentence of a longer order (#109)."""
+    sentences = tuple(
+        sentence
+        for passage in passages
+        for sentence in re.split(r"(?<=[.!?])\s+", passage.strip())
+        if len(sentence.split()) >= MIN_SENTENCE_WORDS
+    )
+    return leave_out(text, (*passages, *sentences))
 
 
 def _words_of(passage: str) -> re.Pattern[str] | None:
