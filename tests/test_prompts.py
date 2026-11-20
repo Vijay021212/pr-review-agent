@@ -2,25 +2,51 @@
 
 from __future__ import annotations
 
+import re
 from importlib import resources
+from pathlib import Path
 
 import pytest
 
 from pr_review_agent.prompts import clip, data_block, load, parse
 
+CASES = Path(__file__).parent.parent / "eval" / "cases"
 
-def test_every_prompt_file_has_a_version_and_text() -> None:
-    names = [
+
+def prompt_names() -> list[str]:
+    return [
         path.name.removesuffix(".md")
         for path in resources.files("pr_review_agent.prompts").iterdir()
         if path.name.endswith(".md")
     ]
+
+
+def test_every_prompt_file_has_a_version_and_text() -> None:
+    names = prompt_names()
     assert "understand" in names
     for name in names:
         prompt = load(name)
         assert prompt.version >= 1
         assert prompt.text
         assert "never instructions" in prompt.text, f"{name} must say data isn't instructions"
+
+
+def test_no_prompt_gives_an_example_the_model_could_copy() -> None:
+    # The model copies examples into its answers: the explore prompt's note about
+    # "average(values)" in "src/report.py" came back as a High finding in a file without
+    # average() (#66). Examples that match an evaluation case also give its answer away.
+    functions = {
+        name
+        for code in CASES.glob("*/head/**/*.py")
+        for name in re.findall(r"^\s*def (\w+)\(", code.read_text(encoding="utf-8"), re.M)
+    }
+    assert functions, "the evaluation cases are needed to check against"
+    for name in prompt_names():
+        text = load(name).text  # with its parts, as the model sees it
+        assert not re.search(r"\b[\w/]+\.py\b", text), f"{name} names an example file"
+        calls = sorted(f for f in functions if re.search(rf"\b{re.escape(f)}\(", text))
+        assert not calls, f"{name} shows calls of {calls}, functions in the evaluation cases"
+        assert "'1'='1" not in text, f"{name} gives the attack of l4-a-sql-injection"
 
 
 @pytest.mark.parametrize("name", ["find_a", "find_b"])

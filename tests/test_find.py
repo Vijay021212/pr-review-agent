@@ -77,7 +77,7 @@ def test_findings_come_back_with_every_field() -> None:
     assert finding.affected_places == ("src/shop.py:12",)
     assert type(finding).__name__ == "Finding"
     assert output.dropped == ()
-    assert [call.prompt for call in output.calls] == ["find_a v2"]
+    assert [call.prompt for call in output.calls] == [load("find_a").label]
 
 
 def test_no_findings_is_a_valid_answer() -> None:
@@ -220,7 +220,7 @@ def test_pass_b_looks_for_security_and_performance() -> None:
     )
     (finding,) = output.findings
     assert (finding.category, finding.level) == (Category.SECURITY, ReviewLevel.ARCHITECTURE)
-    assert [call.prompt for call in output.calls] == ["find_b v2"]
+    assert [call.prompt for call in output.calls] == [load("find_b").label]
     assert "security and performance problems: review levels 4 and 5" in model.calls[0].system
 
 

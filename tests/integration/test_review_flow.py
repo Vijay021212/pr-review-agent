@@ -17,6 +17,7 @@ import pytest
 from pr_review_agent import ReviewIncomplete, Settings, cli, review_pull_request
 from pr_review_agent.domain import FileStatus, RecommendationValue, SetupError
 from pr_review_agent.factory import Components
+from pr_review_agent.prompts import load
 from pr_review_agent.secrets import Masker
 from tests.builders import make_file, make_pull_request
 from tests.fakes import EXPLORE_DONE, KEEP_ONE, FakeChatModel, FakeGitHub, explore_step
@@ -160,7 +161,8 @@ def test_the_command_line_prints_the_whole_review(
     assert "#### `src/cart.py` line 3" in out
     assert "- **What happens now:** ZeroDivisionError, and the checkout page fails." in out
     assert "- **Reviewed (1 file):** `src/cart.py`" in out
-    assert "prompts: understand v1, explore v2, find_a v2, find_b v2" in out
+    labels = ", ".join(load(name).label for name in ("understand", "explore", "find_a", "find_b"))
+    assert f"prompts: {labels}" in out
     # Progress went to the error stream, so the review itself can be saved cleanly.
     assert "Reading pull request octo/shop#7..." in captured.err
 

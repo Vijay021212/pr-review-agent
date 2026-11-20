@@ -21,6 +21,7 @@ from pr_review_agent.domain import (
 )
 from pr_review_agent.factory import Components
 from pr_review_agent.pipeline import run_review
+from pr_review_agent.prompts import load
 from pr_review_agent.runlog import RunLog
 from pr_review_agent.secrets import Masker
 from tests.builders import make_file, make_finding, make_pull_request
@@ -75,7 +76,8 @@ def test_the_stages_run_in_order_and_are_timed() -> None:
         "recommend",
     ]
     assert all(timing.seconds >= 0 for timing in result.timings)
-    assert result.prompt_versions == ("understand v1", "explore v2", "find_a v2", "find_b v2")
+    names = ("understand", "explore", "find_a", "find_b")
+    assert result.prompt_versions == tuple(load(name).label for name in names)
     assert (result.provider, result.model) == ("fake", "fake-model")
     assert result.dry_run
 
