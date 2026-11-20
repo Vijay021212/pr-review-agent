@@ -24,8 +24,10 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    SerializerFunctionWrapHandler,
     StringConstraints,
     ValidationError,
+    model_serializer,
     model_validator,
 )
 
@@ -449,6 +451,16 @@ class Understanding(UnderstandingAnswer):
     # Where those comments are, as (file, line at the reviewed commit): the diffs and the
     # files the later stages read hide these lines, and only these (#109).
     left_out_lines: tuple[tuple[NonEmptyStr, int], ...] = ()
+
+    @model_serializer(mode="wrap")
+    def _without_empty_places(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """No `left_out_lines` is written when there are none: results saved before the
+        field existed then write back the same when scored again, and never claim that no
+        comment was hidden in a review that hid them another way (#109)."""
+        data: dict[str, Any] = handler(self)
+        if not self.left_out_lines:
+            data.pop("left_out_lines", None)
+        return data
 
 
 class ToolCall(_Frozen):
