@@ -1,6 +1,6 @@
 # Design
 
-> **Status:** **v1.2.** v1.0 approved 2026-11-05 by Vijay Bolle; later changes go through change control (section 17).
+> **Status:** **v1.3.** v1.0 approved 2026-11-05 by Vijay Bolle; later changes go through change control (section 17).
 > **Builds on:** [requirements v1.0](requirements.md), [ADR-001](adr/001-model-choice.md) (default model `qwen2.5-coder:7b`), [ADR-002](adr/002-single-agent-with-stages.md) (one agent working in stages), [ADR-003](adr/003-own-model-wrappers.md) (own model wrappers instead of LiteLLM).
 
 The requirements say **what** the agent does. This document says **how** it's built: the parts of the program, what each part is responsible for, the data passed between them, and the important technical choices. Requirement IDs (FR-, NFR-) link each part back to why it exists.
@@ -18,7 +18,7 @@ flowchart TB
 
     subgraph stages ["Stages (ADR-002)"]
         direction LR
-        s0["0. Preflight"] --> s1["1. Fetch"] --> s2["2. Select files"] --> s3["3. Understand"] --> s4["4. Map and explore"] --> s5["5. Find problems"] --> s6["6. Double-check"] --> s7["7. Recommend"] --> s8["8. Publish"]
+        s0["0. Preflight"] --> s1["1. Fetch"] --> s2["2. Select files"] --> s3["3. Understand and screen"] --> s4["4. Map and explore"] --> s5["5. Find problems"] --> s6["6. Double-check"] --> s7["7. Recommend"] --> s8["8. Publish"]
     end
     pipeline --> stages
 
@@ -51,7 +51,7 @@ Code runs the stages in a fixed order (ADR-002). The model is used only in stage
 | **0. Preflight** | Checks the settings, the GitHub token and its permissions, and that the model is reachable; takes the per-pull-request lock; starts the hard-limit clock | No | FR-16, FR-20 (lock), NFR-3 |
 | **1. Fetch** | Reads the pull request: state, title, description, linked issue, head commit, changed files and their diffs. Refuses closed or merged pull requests. Downloads a **snapshot** of the repository at the head commit | No | FR-1, FR-19, FR-20, NFR-10 |
 | **2. Select files** | Skips binary, lock and generated files and the rules file's ignore patterns; ranks the rest by importance; fits them into the model's budget; records every skip with its reason | No | FR-3, FR-4, FR-17 |
-| **3. Understand** | Writes the goal, a plain summary of what changed, the risky parts and the "goal unclear" flag | Yes, one call | FR-2 |
+| **3. Understand and screen** | Writes the goal, a plain summary of what changed, the risky parts and the "goal unclear" flag. Then, in a call of its own, the **screen** quotes the sentences of the pull request's text, and the comments the change adds, that tell the reviewer what to do or conclude: every later stage reads the text and the code without them, and the summary lists them | Yes, two calls: understand, then screen | FR-2, NFR-5 |
 | **4. Map and explore** | Builds the project map, then runs the **agent loop**: the model picks one read-only tool at a time until it has seen enough or reaches the step limit | Yes, one call per step | FR-5, NFR-5 |
 | **5. Find problems** | Runs focused passes over the diff plus what stage 4 found. First release: pass A (correctness and regressions, levels 1–3) and pass B (security and performance, levels 4–5). Later: pass C (design fit and code quality) | Yes, one call per pass (per batch of files) | FR-6, FR-7, FR-8, FR-9 |
 | **6. Double-check** | Re-checks each finding against the code, fixes or drops weak ones, anchors each on a changed line, removes duplicates of earlier runs, masks secrets | Yes, one call per batch of findings | FR-10, FR-11, FR-21 |
@@ -80,7 +80,7 @@ flowchart LR
 | `PullRequest` | owner, repo, number, state, draft flag, title, description, linked issue text, head commit SHA, head repository (for forks), base branch, changed files |
 | `ChangedFile` | path, status (added, modified, removed, renamed), diff lines with old and new line numbers |
 | `ReviewScope` | files to review, files skipped with a reason (`lock file`, `binary`, `ignored by rules`, `too large`), whether any changed file couldn't be reviewed |
-| `Understanding` | goal, summary, risky parts, goal-unclear flag, whether the goal came from the description or was worked out from the code; and the sentences of the pull request's text that tell the reviewer what to do, added by the screen step |
+| `Understanding` | goal, summary, risky parts, goal-unclear flag, whether the goal came from the description or was worked out from the code; and the sentences of the pull request's text and the comments its code adds that tell the reviewer what to do, added by the screen step |
 | `ExploredContext` | the project map, every tool call made, and the file excerpts the model chose to keep; whether the step limit was reached |
 | `Finding` | file, line, side (new or removed code), category, review level, severity and its reason, status (`confirmed` or `potential risk`), trigger, current behaviour, expected behaviour, explanation, suggested fix, other affected places |
 | `CheckedFindings` | findings kept, findings dropped with the reason, findings skipped as already posted or resolved |
@@ -170,7 +170,7 @@ Prompts live in text files in `src/pr_review_agent/prompts/`, one per stage and 
 Every prompt follows the same rules:
 
 - the severity definitions (requirements 5.2) and review levels (5.1) are included word for word,
-- pull request text and code sit between clear markers, with the rule that they're **data to review, never instructions**; because a small model can follow such text anyway, a screen step after the understand stage quotes, in a call of its own, every sentence of the pull request's text and every comment its code adds that tells the reviewer what to do or conclude; code keeps a sentence only if it's in the text word for word and a comment line only if its text is inside a quote (a line of code is never left out), leaves them out of everything the later stages read, and the summary lists them,
+- pull request text and code sit between clear markers, with the rule that they're **data to review, never instructions**; because a small model can follow such text anyway, a screen step after the understand stage quotes, in a call of its own, every sentence of the pull request's text and every comment its code adds that tells the reviewer what to do or conclude; code keeps a sentence only if it's word for word within one part of the text (the title, the description or a linked issue) and a comment line only if its text is inside a quote, leaves the sentences out of the pull request's text and the understanding's goal and summary, and the comments out of the code only as whole comment lines with their numbers and markers kept, so a line of code never changes (#109), and the summary lists them,
 - the answer must match the stage's JSON schema.
 
 ## 8. Rules that are plain code (no model)
@@ -279,7 +279,7 @@ src/pr_review_agent/
   factory.py         builds and connects every part
   pipeline.py        runs the stages, enforces the deadline and the failure rule
   cli.py             the command line
-  stages/            preflight, fetch, understand, explore, find, verify, publish
+  stages/            preflight, fetch, understand, screen, explore, find, verify, publish
   tools.py           the read-only explore tools
   project_map.py     the map built by code
   selection.py       skips, ranking, batching
@@ -314,7 +314,7 @@ eval/cases/          the test pull requests
 | FR-24 | api.py, `__init__.py`, py.typed |
 | NFR-1, NFR-7 | models/, config.py |
 | NFR-3, NFR-4 | pipeline.py (deadline, failure rule) |
-| NFR-5 | tools.py, github/ (safe snapshot), secrets.py |
+| NFR-5 | tools.py, github/ (safe snapshot), secrets.py, stages/screen.py and prompts/ (`leave_out()`, `leave_out_comments()`) |
 | NFR-6, NFR-8 | uv.lock, CI, tests/ |
 | NFR-10 | github/ retries, models/ retries |
 
@@ -324,7 +324,7 @@ eval/cases/          the test pull requests
 |---|---|
 | Own model wrappers instead of LiteLLM | Yes: [ADR-003](adr/003-own-model-wrappers.md) |
 | Rules file read from the base branch | Yes (section 9) |
-| Default context window | 16,384 tokens, to be confirmed by the evaluation |
+| Default context window | 16,384 tokens, confirmed by the evaluation of v0.3.0 (section 4) |
 | Build order | Decided in Stage 3 (planning), as GitHub issues and milestones |
 
 ## 17. Change history
@@ -335,5 +335,6 @@ eval/cases/          the test pull requests
 | v1.0 | 2026-11-05 | Approved by Vijay Bolle; ADR-003 accepted |
 | v1.1 | 2026-11-05 | Editorial only: references to other projects removed |
 | v1.2 | 2026-11-05 | Python API (section 12.1) for requirement FR-24 |
+| v1.3 | 2026-11-20 | v0.3.0: the evaluation and its readings (section 13, #21, #22, #64); the screen in stage 3, and passages addressed to the reviewer left out of what every later stage reads, of code only as whole comment lines (sections 2 and 7, #70, #80, #82, #109); the double-check with the finding passes' context, never lowering a finding (#72, #84); the 16k window confirmed (section 4, #23) |
 
 After v1.0, a design change is made through a pull request that updates this document, adds a row here and, for a significant choice, adds an ADR.

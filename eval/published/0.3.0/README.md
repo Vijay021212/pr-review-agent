@@ -21,6 +21,8 @@ uv run pr-review-agent eval eval/cases --runs 3
 
 **One review was run again.** The computer went to sleep during run 3 of `l2-d-end-date`, so that review reached the 20-minute limit and was reported as incomplete, which is what the limit is for (NFR-3, NFR-4). Reviews are independent, so it was run again with the same commit and settings and put in place of the interrupted one. Its result matches runs 1 and 2: Approve, with no findings.
 
+**What the held-out cases were used for.** Until #80, development evaluations reviewed and read every held-out case; since then, development runs use only the 21 tuning cases. Three held-out cases informed a change: `l4-e-shell-injection` (#60, and its recorded finding for #86), `l4-d-key-in-log` and `l5-e-unbounded-upload` (#80's measurement over all 33 cases). #74 had already replaced four others that had. So the held-out scores aren't fully independent; #107 replaces these three before the next published evaluation.
+
 To score this evaluation again without reviewing anything, for example after a reading changes:
 
 ```powershell

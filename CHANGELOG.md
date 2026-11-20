@@ -13,9 +13,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Changed
 
-- The finding prompts (find_a and find_b, now version 2) no longer call an empty list of findings a good answer; the hint made the model answer with no findings when the change had a problem ([#62](https://github.com/Vijay021212/pr-review-agent/issues/62)).
+- The finding prompts (find_a and find_b) no longer call an empty list of findings a good answer; the hint made the model answer with no findings when the change had a problem ([#62](https://github.com/Vijay021212/pr-review-agent/issues/62)).
 - The explore, understand, find_a and find_b prompts describe what a good answer contains instead of giving an example of one; the model copied the examples into its notes and findings, and two of them matched evaluation cases ([#66](https://github.com/Vijay021212/pr-review-agent/issues/66)).
 - Four held-out evaluation cases that informed a change while tuning (clean-e, l3-d, l3-e, inject-c) are replaced by new held-out cases of the same kinds, so the held-out scores again show how the agent does on changes it wasn't tuned on; their readings are removed ([#74](https://github.com/Vijay021212/pr-review-agent/issues/74)).
+- The README, the published evaluation and the design say what the held-out cases were used for, how long a review takes on a real repository, and the screen step's limits found by the end-to-end test of v0.3.0 ([#110](https://github.com/Vijay021212/pr-review-agent/issues/110)).
 
 ### Security
 

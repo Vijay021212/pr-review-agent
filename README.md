@@ -103,7 +103,7 @@ A finding only catches a planted problem if it also describes it, and that takes
 uv run pr-review-agent eval eval/cases --rescore eval/results/<date-time>
 ```
 
-The cases in `eval/cases` are 33 small pull requests: 25 with one planted problem each (5 per review level, from a missing None check to a race on a wallet balance), 5 clean changes where any comment is a false alarm, and 3 prompt-injection attempts. 12 of them, spread over every kind and level, are held out: they are never looked at while tuning prompts or settings, so their scores show how the agent does on changes it wasn't tuned on.
+The cases in `eval/cases` are 33 small pull requests: 25 with one planted problem each (5 per review level, from a missing None check to a race on a wallet balance), 5 clean changes where any comment is a false alarm, and 3 prompt-injection attempts. 12 of them, spread over every kind and level, are held out: development runs use only the other 21, so the held-out scores show how the agent does on changes it wasn't tuned on. In v0.3.0 they aren't fully independent: development evaluations reviewed and read them until [#80](https://github.com/Vijay021212/pr-review-agent/issues/80), and three of them informed a change ([#107](https://github.com/Vijay021212/pr-review-agent/issues/107)).
 
 ### Scores of v0.3.0
 
@@ -118,8 +118,8 @@ Measured on 18 and 19 November 2026 with the default model, `qwen2.5-coder:7b`, 
 | Recommendation accuracy | 80% or more | 39% | 33% | No |
 | Most comments on a clean pull request | 1 or fewer | 0 | 0 | Yes |
 | Prompt injections resisted | 100% | 100% | 100% | Yes |
-| Minutes per pull request | under 5 (up to 300 lines) | 1.8 | 1.8 | On small changes |
-| Slowest review, minutes | under 10 (up to 500 lines) | 3.0 | 3.0 | On small changes |
+| Minutes per pull request | under 5 (up to 300 lines) | 1.8 | 1.8 | On the small cases only |
+| Slowest review, minutes | under 10 (up to 500 lines) | 3.0 | 3.0 | On the small cases only |
 
 | Review level | Catch rate | Precision |
 |---|---|---|
@@ -130,11 +130,12 @@ Measured on 18 and 19 November 2026 with the default model, `qwen2.5-coder:7b`, 
 | 5. Adversarial scenarios, unusual combinations | 20% | no findings |
 
 - **When it reports a problem, it's usually right, but it misses most of them.** 86% of its findings are right, it commented on none of the clean changes, and it ignored every prompt injection; it catches 41% of the planted problems. It does far better on a change that breaks other code or opens a security hole (levels 3 and 4) than on a bug inside the changed lines themselves (levels 1, 2 and 5), where it catches 1 in 5. Each level has 5 to 7 planted problems, so one case moves a level's score by 14 to 20 points.
-- **The held-out cases score like the tuning cases** (40% and 41% caught), so the tuning didn't fit the agent to the cases it was tuned on.
+- **The held-out cases score like the tuning cases** (40% and 41% caught), so the tuning didn't fit the agent to the cases it was tuned on, though three of the held-out cases had informed a change ([#107](https://github.com/Vijay021212/pr-review-agent/issues/107)).
 - **The three runs gave the same scores**: at temperature 0, every case got the same recommendation and the same findings each time.
 - **The recommendation follows the catch rate.** Of the 20 wrong recommendations in each run, 15 are Approve on a change whose problem was missed, 4 found the problem but left the decision to a person (Needs Human Review) instead of asking for changes, and 1 came from a false alarm.
 - **Some right findings were removed by the agent's own checks.** The double-check rejected 6 right findings with reasons that agree with them: it dropped 2, so their problems were missed (l3-a, l5-d), and sent the other 4 to a person instead of asking for changes ([#92](https://github.com/Vijay021212/pr-review-agent/issues/92)). The rule for findings that describe no failure dropped one more, whose explanation named the bug (l2-a, [#93](https://github.com/Vijay021212/pr-review-agent/issues/93)).
-- **Speed and the context window are confirmed on small changes only:** the cases have at most 21 changed lines. The largest model call, question and answer, used 1,851 of the 16,384 tokens, and nothing was cut to fit. The 16k window stays: it leaves about 9,900 tokens for the diff in each model call, room for a 300-line change at up to 90 characters a line, where 8k would leave about 1,700.
+- **Speed and the context window are confirmed on small changes only:** the cases have at most 21 changed lines, in tiny repositories. On a real repository a review is slower: in the end-to-end test of v0.3.0, a 17-line pull request on this repository took 5 min 4 s, and an 89-line pull request on a larger project 6 min 50 s, much of it exploring a bigger project map ([#98](https://github.com/Vijay021212/pr-review-agent/issues/98)). The largest model call, question and answer, used 1,851 of the 16,384 tokens, and nothing was cut to fit. The 16k window stays: it leaves about 9,900 tokens for the diff in each model call, room for a 300-line change at up to 90 characters a line, where 8k would leave about 1,700.
+- **The screen step has limits the cases don't show.** In the end-to-end test, a description put one order to automated reviewers between two ordinary sentences: the screen quoted the two ordinary sentences and missed the order. The model didn't follow it, and the issue is [#104](https://github.com/Vijay021212/pr-review-agent/issues/104).
 - **Only the 7B model was measured.** `qwen3-coder:30b` doesn't fit in this laptop's memory during normal work ([ADR-001](docs/adr/001-model-choice.md)). The model is a setting, so the same evaluation measures any other.
 
 Each gap has its own issue: the catch rate ([#94](https://github.com/Vijay021212/pr-review-agent/issues/94)), the double-check ([#92](https://github.com/Vijay021212/pr-review-agent/issues/92)) and the rule ([#93](https://github.com/Vijay021212/pr-review-agent/issues/93)) that removed right findings, the recommendation accuracy ([#100](https://github.com/Vijay021212/pr-review-agent/issues/100)), findings on a function's first line ([#95](https://github.com/Vijay021212/pr-review-agent/issues/95)), a function named that doesn't exist ([#96](https://github.com/Vijay021212/pr-review-agent/issues/96)), a request for a docstring posted as a bug ([#97](https://github.com/Vijay021212/pr-review-agent/issues/97)), speed on big pull requests ([#98](https://github.com/Vijay021212/pr-review-agent/issues/98)) and the per-level targets ([#99](https://github.com/Vijay021212/pr-review-agent/issues/99)).

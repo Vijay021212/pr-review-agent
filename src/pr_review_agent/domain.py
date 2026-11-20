@@ -444,10 +444,10 @@ class Understanding(UnderstandingAnswer):
     risky_parts: tuple[NonEmptyStr, ...] = ()
     # Sentences of the pull request's text, and comments its code adds, that tell the
     # reviewer, or an AI, what to do or what to conclude, quoted exactly by the screen stage;
-    # left out of what every later stage reads (NFR-5).
+    # left out of what the later stages read, but not yet of the project map (NFR-5, #104).
     addressed_to_reviewer: tuple[NonEmptyStr, ...] = ()
-    # Where those comments are, as (file, line at the reviewed commit): every view of the
-    # code hides these lines, and only these (#109).
+    # Where those comments are, as (file, line at the reviewed commit): the diffs and the
+    # files the later stages read hide these lines, and only these (#109).
     left_out_lines: tuple[tuple[NonEmptyStr, int], ...] = ()
 
 

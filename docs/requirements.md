@@ -1,6 +1,6 @@
 # Requirements
 
-> **Status:** **v1.2.** Baseline v1.0 approved 2026-11-04 by Vijay Bolle; later changes go through change control (see [section 13](#13-change-history)).
+> **Status:** **v1.3.** Baseline v1.0 approved 2026-11-04 by Vijay Bolle; later changes go through change control (see [section 13](#13-change-history)).
 > **Project:** `pr-review-agent` · **Owner and approver:** Vijay Bolle
 
 This document says **what** the agent must do and how we'll know it works. "v1" means the first full release of the software; the document's own versions (draft 0.x, baseline 1.0) are counted separately. It doesn't say **how** it's built; that goes in the design document. Words with a special meaning are explained in the [glossary](#12-glossary).
@@ -231,7 +231,7 @@ We studied the most-starred open-source PR reviewers on GitHub on 2026-11-03 and
 | R-2 | The model barely fits in 24 GB of RAM (about 19 GB for `qwen3-coder:30b`) | A smaller model is the fallback (ADR-001); the README states the memory needed |
 | R-3 | Reviews are too slow on a CPU; a full published evaluation (30+ pull requests × 3 runs) could take 8–10 hours | Speed targets are provisional (NFR-3); the hard limit stops runaway reviews; published evaluation runs are done overnight, and single runs are used during development |
 | R-4 | The evaluation is too small or flatters the agent | Minimum size, held-out set and repeat runs (7.1) |
-| R-5 | A pull request tricks the agent through prompt injection | Read-only tools that can't run code (NFR-5); the recommendation is decided by code, not the model (5.3); injection tests (FR-18) |
+| R-5 | A pull request tricks the agent through prompt injection | Read-only tools that can't run code (NFR-5); the recommendation is decided by code, not the model (5.3); a screen step quotes the text and comments that tell the reviewer what to do, and the later stages read the pull request without them; injection tests (FR-18). The screen's own limits are tracked in #104 |
 | R-6 | GitHub's API limits or changes break reviews | Retries and loud failures (NFR-10, NFR-4) |
 | R-7 | Scope creep: v1 keeps growing and never finishes | The baseline and change control ([section 13](#13-change-history)) |
 
@@ -282,6 +282,7 @@ We studied the most-starred open-source PR reviewers on GitHub on 2026-11-03 and
 | **v1.0** | 2026-11-04 | **Approved as the baseline** by Vijay Bolle. No content changes from v0.5. |
 | v1.1 | 2026-11-05 | Editorial only, no requirement changed: open questions replaced by links to the decisions (section 11); "Comes from" wording made neutral; basic glossary entries removed. |
 | v1.2 | 2026-11-05 | **Change request:** added FR-24 (usable as a Python library, Should), user story US-11, a scope line and the "Public API" glossary entry. Owner decision. |
+| v1.3 | 2026-11-20 | Editorial only, no requirement changed: risk R-5 lists the screen step built in v0.3.0 (#80, #82) among its mitigations. |
 
 **ID changes in v0.3:**
 
