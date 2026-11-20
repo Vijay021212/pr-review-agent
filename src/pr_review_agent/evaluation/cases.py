@@ -36,6 +36,8 @@ from pr_review_agent.domain import (
 from pr_review_agent.github.diff import parse_patch
 
 CASE_FILE = "case.yaml"
+# Folders that are never part of a case: Python writes them whenever a case's code is run.
+IGNORED_FOLDERS = frozenset({"__pycache__"})
 
 
 class CaseKind(StrEnum):
@@ -183,11 +185,23 @@ def _changed_files(base: Path, head: Path) -> tuple[ChangedFile, ...]:
 def _text_files(root: Path) -> set[str]:
     if not root.is_dir():
         return set()
-    return {path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()}
+    return {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and not IGNORED_FOLDERS & set(path.relative_to(root).parts)
+    }
 
 
 def _read(path: Path) -> str:
-    return path.read_text(encoding="utf-8") if path.is_file() else ""
+    if not path.is_file():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raise SetupError(
+            f"The evaluation case file {path} isn't UTF-8 text.",
+            "Cases hold source files only: remove it, or save it as UTF-8.",
+        ) from None
 
 
 def _pull_request(name: str, spec: CaseSpec, files: tuple[ChangedFile, ...]) -> PullRequest:

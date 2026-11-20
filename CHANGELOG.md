@@ -22,6 +22,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- The evaluation leaves `__pycache__` folders out of a case (Python writes them when a case's code is run), and refuses any other file that isn't UTF-8 text with a message naming it, instead of stopping with a bare `UnicodeDecodeError` ([#78](https://github.com/Vijay021212/pr-review-agent/issues/78)).
 - The double-check may raise a finding's severity or confirm it, but no longer lowers either: every finding it lowered in the evaluations was right, and in one it turned a confirmed Critical division by zero into a Low potential risk, and Request Changes into Approve ([#72](https://github.com/Vijay021212/pr-review-agent/issues/72)).
 - A finding whose "what happens now" is what should happen describes no failure, and is dropped with that reason before the model's double-check; the model had reported such findings, like "This change is correct", and they were posted ([#68](https://github.com/Vijay021212/pr-review-agent/issues/68)).
 - A file the pull request changes is no longer shown to the finding passes a second time as unchanged related code when exploring opened it; the model read its new lines as old ones and missed the problems in them ([#60](https://github.com/Vijay021212/pr-review-agent/issues/60)).

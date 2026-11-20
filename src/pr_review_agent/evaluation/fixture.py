@@ -18,7 +18,7 @@ from pr_review_agent.domain import (
     ReviewComment,
     SetupError,
 )
-from pr_review_agent.evaluation.cases import Case
+from pr_review_agent.evaluation.cases import IGNORED_FOLDERS, Case
 
 
 class FixtureGitHub:
@@ -37,7 +37,8 @@ class FixtureGitHub:
         self, pull_request: PullRequest, folder: Path, deadline: Deadline
     ) -> Path:
         root = folder / "repository"
-        shutil.copytree(self.case.head, root)
+        # The same files the case's diff was made from: what `cases.py` leaves out, so is this.
+        shutil.copytree(self.case.head, root, ignore=shutil.ignore_patterns(*IGNORED_FOLDERS))
         return root
 
     def head_sha(self, ref: PullRequestRef, deadline: Deadline) -> str:
