@@ -155,3 +155,11 @@ def test_invalid_environment_values_are_reported_too(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("PRRA_EXPLORE_MAX_STEPS", "many")
     with pytest.raises(SetupError, match="PRRA_EXPLORE_MAX_STEPS"):
         Settings()
+
+
+def test_an_invalid_setting_never_repeats_its_value() -> None:
+    # A setting can be a secret pasted into the wrong variable (FR-21).
+    with pytest.raises(SetupError) as caught:
+        Settings(context_tokens="ghp_secretvalue")
+    assert "PRRA_CONTEXT_TOKENS: Input should be a valid integer" in caught.value.problem
+    assert "ghp_secretvalue" not in str(caught.value)

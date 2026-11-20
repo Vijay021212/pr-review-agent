@@ -1,5 +1,6 @@
 {
   "format": 2,
+  "version": "0.3.0.dev0",
   "settings": "context 16384 tokens, up to 10 explore steps, 20-minute limit",
   "runs": 3,
   "reviews": [
@@ -1701,6 +1702,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 9,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -2020,6 +2022,7 @@
           "severity": "high",
           "status": "confirmed",
           "near_line": 9,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -3184,6 +3187,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 6,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -3533,6 +3537,7 @@
           "severity": "medium",
           "status": "confirmed",
           "near_line": 5,
+          "catches": false,
           "verdict": "false alarm",
           "read": true
         }
@@ -4452,6 +4457,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 7,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -5888,6 +5894,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 4,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -6439,6 +6446,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 10,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -6803,6 +6811,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 2,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -7047,6 +7056,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 9,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -7364,6 +7374,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 12,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -7679,6 +7690,7 @@
           "severity": "low",
           "status": "confirmed",
           "near_line": 8,
+          "catches": false,
           "verdict": "real problem",
           "read": true
         }
@@ -8249,6 +8261,7 @@
           "severity": "high",
           "status": "confirmed",
           "near_line": 7,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -8560,6 +8573,7 @@
           "severity": "low",
           "status": "confirmed",
           "near_line": 19,
+          "catches": false,
           "verdict": "false alarm",
           "read": true
         }
@@ -9756,6 +9770,7 @@
           "severity": "high",
           "status": "confirmed",
           "near_line": 8,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -11759,6 +11774,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 9,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -12078,6 +12094,7 @@
           "severity": "high",
           "status": "confirmed",
           "near_line": 9,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -13242,6 +13259,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 6,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -13591,6 +13609,7 @@
           "severity": "medium",
           "status": "confirmed",
           "near_line": 5,
+          "catches": false,
           "verdict": "false alarm",
           "read": true
         }
@@ -14510,6 +14529,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 7,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -15946,6 +15966,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 4,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -16497,6 +16518,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 10,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -16861,6 +16883,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 2,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -17105,6 +17128,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 9,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -17422,6 +17446,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 12,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -17737,6 +17762,7 @@
           "severity": "low",
           "status": "confirmed",
           "near_line": 8,
+          "catches": false,
           "verdict": "real problem",
           "read": true
         }
@@ -18307,6 +18333,7 @@
           "severity": "high",
           "status": "confirmed",
           "near_line": 7,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -18618,6 +18645,7 @@
           "severity": "low",
           "status": "confirmed",
           "near_line": 19,
+          "catches": false,
           "verdict": "false alarm",
           "read": true
         }
@@ -19814,6 +19842,7 @@
           "severity": "high",
           "status": "confirmed",
           "near_line": 8,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -21817,6 +21846,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 9,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -22136,6 +22166,7 @@
           "severity": "high",
           "status": "confirmed",
           "near_line": 9,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -23300,6 +23331,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 6,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -23649,6 +23681,7 @@
           "severity": "medium",
           "status": "confirmed",
           "near_line": 5,
+          "catches": false,
           "verdict": "false alarm",
           "read": true
         }
@@ -24568,6 +24601,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 7,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -26004,6 +26038,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 4,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -26555,6 +26590,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 10,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -26919,6 +26955,7 @@
           "severity": "high",
           "status": "potential risk",
           "near_line": 2,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -27163,6 +27200,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 9,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -27480,6 +27518,7 @@
           "severity": "critical",
           "status": "confirmed",
           "near_line": 12,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -27795,6 +27834,7 @@
           "severity": "low",
           "status": "confirmed",
           "near_line": 8,
+          "catches": false,
           "verdict": "real problem",
           "read": true
         }
@@ -28365,6 +28405,7 @@
           "severity": "high",
           "status": "confirmed",
           "near_line": 7,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }
@@ -28676,6 +28717,7 @@
           "severity": "low",
           "status": "confirmed",
           "near_line": 19,
+          "catches": false,
           "verdict": "false alarm",
           "read": true
         }
@@ -29872,6 +29914,7 @@
           "severity": "high",
           "status": "confirmed",
           "near_line": 8,
+          "catches": true,
           "verdict": "same problem",
           "read": true
         }

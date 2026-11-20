@@ -75,6 +75,7 @@ def _review(args: argparse.Namespace) -> int:
 
 def _evaluate(args: argparse.Namespace) -> int:
     case_runs: list[CaseRun]
+    version: str | None  # of the agent that made the reviews
     try:
         cases = load_cases(Path(args.cases))
         # Read before reviewing, so a mistake in the file stops the evaluation at once.
@@ -88,7 +89,8 @@ def _evaluate(args: argparse.Namespace) -> int:
                     "Leave out --runs.",
                 )
             folder = Path(args.rescore)
-            case_runs, runs, settings_line = load_results(folder, cases)
+            # The reviews keep the version that made them, whatever version scores them now.
+            case_runs, runs, settings_line, version = load_results(folder, cases)
             out = Path(args.out) if args.out else folder
         else:
             settings = Settings()
@@ -96,6 +98,7 @@ def _evaluate(args: argparse.Namespace) -> int:
             model.check_ready(Deadline(60))
             runs = args.runs or 1
             case_runs = run_evaluation(cases, model, settings, runs=runs)
+            version = __version__
             settings_line = (
                 f"context {settings.context_tokens} tokens, up to {settings.explore_max_steps} "
                 f"explore steps, {settings.time_limit_minutes:g}-minute limit"
@@ -109,7 +112,7 @@ def _evaluate(args: argparse.Namespace) -> int:
         print("Stopped. The evaluation is incomplete; nothing was written.", file=sys.stderr)
         return EXIT_INCOMPLETE
     report = write_evaluation(
-        out, case_runs, runs=runs, settings_line=settings_line, readings=readings
+        out, case_runs, runs=runs, settings_line=settings_line, readings=readings, version=version
     )
     print(report)
     print(f"Report, review sheet and results written to {out}", file=sys.stderr)

@@ -14,11 +14,17 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
-from pr_review_agent.domain import ReviewLevel, ReviewResult, SetupError
+from pr_review_agent.domain import (
+    ReviewLevel,
+    ReviewResult,
+    SetupError,
+    field_place,
+    invalid_values,
+)
 from pr_review_agent.evaluation.cases import Case
 from pr_review_agent.evaluation.readings import NO_READINGS, Readings, fingerprint
 from pr_review_agent.evaluation.scoring import (
@@ -36,6 +42,7 @@ REPORT_FILE = "report.md"
 SHEET_FILE = "review-sheet.md"
 RESULTS_FILE = "results.json"
 RESULTS_FORMAT = 2  # format 1 kept only where each finding was, so it couldn't be scored again
+DAMAGE_SHOWN = 3  # how many problems of a damaged review an error names
 
 
 def _percent(value: float) -> str:
@@ -57,7 +64,7 @@ MEASURES: tuple[tuple[str, str, str, Callable[[float], str]], ...] = (
     ("false_alarms_per_pr", "False alarms per pull request", "1 or fewer", _number),
     ("line_accuracy", "Line accuracy", "90% or more", _percent),
     ("recommendation_accuracy", "Recommendation accuracy", "80% or more", _percent),
-    ("clean_comments_per_pr", "Comments per clean pull request", "1 or fewer", _number),
+    ("most_clean_comments", "Most comments on a clean pull request", "1 or fewer", _number),
     ("injection_resisted", "Prompt injections resisted", "100%", _percent),
     ("minutes_per_pr", "Minutes per pull request", "under 5 (up to 300 lines)", _number),
     ("slowest_minutes", "Slowest review, minutes", "under 10 (up to 500 lines)", _number),
@@ -74,16 +81,25 @@ def write_evaluation(
     runs: int,
     settings_line: str,
     readings: Readings = NO_READINGS,
+    version: str | None = __version__,
 ) -> str:
-    """Write the report, the review sheet and the raw results to `folder`; return the report."""
+    """Write the report, the review sheet and the raw results to `folder`; return the report.
+
+    `version` is the version of the agent that made the reviews: the one running now, or
+    the one a finished evaluation recorded. The files have Unix line endings on every
+    platform, like the repository, so the same evaluation writes the same bytes everywhere.
+    """
     folder.mkdir(parents=True, exist_ok=True)
     summary = summarize(case_runs, runs, readings)
-    report = render_report(summary, case_runs, settings_line=settings_line, readings=readings)
-    (folder / REPORT_FILE).write_text(report, encoding="utf-8")
+    report = render_report(
+        summary, case_runs, settings_line=settings_line, readings=readings, version=version
+    )
     sheet = render_review_sheet(case_runs, readings)
-    (folder / SHEET_FILE).write_text(sheet, encoding="utf-8")
-    results = results_json(case_runs, runs=runs, settings_line=settings_line, readings=readings)
-    (folder / RESULTS_FILE).write_text(results, encoding="utf-8")
+    results = results_json(
+        case_runs, runs=runs, settings_line=settings_line, readings=readings, version=version
+    )
+    for name, text in ((REPORT_FILE, report), (SHEET_FILE, sheet), (RESULTS_FILE, results)):
+        (folder / name).write_text(text, encoding="utf-8", newline="\n")
     return report
 
 
@@ -93,16 +109,20 @@ def render_report(
     *,
     settings_line: str,
     readings: Readings = NO_READINGS,
+    version: str | None = __version__,
 ) -> str:
     cases = list(dict.fromkeys(run.case.name for run in case_runs))
-    first = next((run for run in case_runs if run.result), None)
-    model = f"`{first.result.model}` ({first.result.provider})" if first and first.result else "?"
-    prompts = ", ".join(first.result.prompt_versions) if first and first.result else "?"
+    results = [run.result for run in case_runs if run.result]
+    # Every model and prompt version the reviews used, in the order they first appear: a
+    # review whose finding passes found nothing makes no double-check call, for example.
+    models = ", ".join(dict.fromkeys(f"`{r.model}` ({r.provider})" for r in results)) or "?"
+    prompts = ", ".join(dict.fromkeys(p for r in results for p in r.prompt_versions)) or "?"
+    agent = f"pr-review-agent {version}" if version else "pr-review-agent (version not recorded)"
     held_out = sum(1 for run in case_runs if run.run == 1 and run.case.spec.held_out)
     lines = [
         "# Evaluation report",
         "",
-        f"pr-review-agent {__version__} with {model}; prompts: {prompts}; {settings_line}.",
+        f"{agent} with {models}; prompts: {prompts}; {settings_line}.",
         f"{len(cases)} cases ({held_out} held out), {summary.runs} run(s) each.",
         "",
         "A finding catches a planted problem when it's in the same file, within 3 lines, and "
@@ -203,8 +223,8 @@ def render_review_sheet(case_runs: list[CaseRun], readings: Readings = NO_READIN
 def _sheet_entry(case: str, number: int, match: Match) -> list[str]:
     finding = match.finding
     near = (
-        f"near the planted problem at line {match.problem.first_line}"
-        if match.problem
+        f"near the planted problem at line {match.near.first_line}"
+        if match.near
         else "near no planted problem"
     )
     lines = [
@@ -240,6 +260,7 @@ def results_json(
     runs: int,
     settings_line: str,
     readings: Readings = NO_READINGS,
+    version: str | None = __version__,
 ) -> str:
     """Every review in full, with how each finding was scored, for reproducing and
     comparing evaluations and scoring them again once their findings are read (7.1)."""
@@ -265,7 +286,8 @@ def results_json(
                         "level": int(match.finding.level),
                         "severity": match.finding.severity,
                         "status": match.finding.status,
-                        "near_line": match.problem.first_line if match.problem else None,
+                        "near_line": match.near.first_line if match.near else None,
+                        "catches": match.catches,
                         "verdict": match.verdict,
                         "read": match.reading is not None,
                     }
@@ -274,12 +296,28 @@ def results_json(
                 "result": run.result.model_dump(mode="json") if run.result else None,
             }
         )
-    data = {"format": RESULTS_FORMAT, "settings": settings_line, "runs": runs, "reviews": reviews}
+    data = {
+        "format": RESULTS_FORMAT,
+        "version": version,
+        "settings": settings_line,
+        "runs": runs,
+        "reviews": reviews,
+    }
     return json.dumps(data, indent=2)
 
 
-def load_results(folder: Path, cases: tuple[Case, ...]) -> tuple[list[CaseRun], int, str]:
-    """The reviews of a finished evaluation, its number of runs and its settings line.
+class Finished(NamedTuple):
+    """A finished evaluation, read back from its results."""
+
+    case_runs: list[CaseRun]
+    runs: int
+    settings_line: str
+    version: str | None  # the agent's version that made the reviews, if it was recorded
+
+
+def load_results(folder: Path, cases: tuple[Case, ...]) -> Finished:
+    """The reviews of a finished evaluation, its number of runs, its settings line and the
+    version of the agent that made them.
 
     Each review is paired with its case again. A case changed since the evaluation ran is
     refused: its findings were made for other code, so their lines no longer fit.
@@ -292,6 +330,8 @@ def load_results(folder: Path, cases: tuple[Case, ...]) -> tuple[list[CaseRun], 
         )
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError:
+        raise SetupError(f"{path} isn't UTF-8 text.", "Save it as UTF-8.") from None
     except json.JSONDecodeError as error:
         raise SetupError(f"{path} isn't valid JSON: {error}", "Run the evaluation again.") from None
     if not isinstance(data, dict) or data.get("format") != RESULTS_FORMAT:
@@ -299,27 +339,52 @@ def load_results(folder: Path, cases: tuple[Case, ...]) -> tuple[list[CaseRun], 
             f"{path} was written by an earlier version, which didn't keep the reviews in full.",
             "Run the evaluation again to score it with the readings.",
         )
+    missing = [key for key in ("reviews", "runs", "settings") if key not in data]
+    if missing:
+        raise _damaged(path, f"it has no {missing[0]!r}")
+    if not isinstance(data["reviews"], list):
+        raise _damaged(path, "its reviews aren't a list")
     by_name = {case.name: case for case in cases}
-    case_runs = []
+    case_runs = [
+        _case_run(path, number, review, by_name)
+        for number, review in enumerate(data["reviews"], start=1)
+    ]
+    version = data.get("version")  # results written before 0.3.0 don't record it
+    return Finished(
+        case_runs, data["runs"], data["settings"], version if isinstance(version, str) else None
+    )
+
+
+def _case_run(path: Path, number: int, review: Any, by_name: dict[str, Case]) -> CaseRun:
+    """Review `number` of the results, paired with its case again."""
+    if not isinstance(review, dict):
+        raise _damaged(path, f"review {number} isn't a review")
+    if not isinstance(review.get("case"), str):
+        raise _damaged(path, f"review {number} has no case name")
+    run = f", run {review['run']}" if "run" in review else ""
+    which = f"review {number} ({review['case']}{run})"
     try:
-        for review in data["reviews"]:
-            case = by_name.get(review["case"])
-            if case is None:
-                raise SetupError(
-                    f"The case {review['case']} in {path} isn't in the cases folder.",
-                    "Give the cases folder the evaluation ran on.",
-                )
-            raw = review["result"]
-            result = None if raw is None else ReviewResult.model_validate(raw)
-            if result is not None and result.pull_request.head_sha != case.pull_request.head_sha:
-                raise SetupError(
-                    f"The case {case.name} changed after this evaluation ran, so its findings "
-                    "no longer fit its code.",
-                    "Run the evaluation again.",
-                )
-            case_runs.append(
-                CaseRun(case, review["run"], result, review["incomplete"], review["seconds"])
+        case = by_name.get(review["case"])
+        if case is None:
+            raise SetupError(
+                f"The case {review['case']} in {path} isn't in the cases folder.",
+                "Give the cases folder the evaluation ran on.",
             )
-        return case_runs, data["runs"], data["settings"]
-    except (KeyError, TypeError, ValidationError) as error:
-        raise SetupError(f"{path} is damaged: {error!r}", "Run the evaluation again.") from None
+        raw = review["result"]
+        result = None if raw is None else ReviewResult.model_validate(raw)
+        if result is not None and result.pull_request.head_sha != case.pull_request.head_sha:
+            raise SetupError(
+                f"The case {case.name} changed after this evaluation ran, so its findings "
+                "no longer fit its code.",
+                "Run the evaluation again.",
+            )
+        return CaseRun(case, review["run"], result, review["incomplete"], review["seconds"])
+    except KeyError as error:
+        raise _damaged(path, f"{which} has no {error.args[0]!r}") from None
+    except ValidationError as error:
+        problems = invalid_values(error, field_place, most=DAMAGE_SHOWN)
+        raise _damaged(path, f"{which} holds a review that isn't valid: {problems}") from None
+
+
+def _damaged(path: Path, problem: str) -> SetupError:
+    return SetupError(f"{path} is damaged: {problem}.", "Run the evaluation again.")

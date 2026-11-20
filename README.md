@@ -116,7 +116,7 @@ Measured on 18 and 19 November 2026 with the default model, `qwen2.5-coder:7b`, 
 | False alarms per pull request | 1 or fewer | 0.1 | 0.1 | Yes |
 | Line accuracy | 90% or more | 73% | 75% | No |
 | Recommendation accuracy | 80% or more | 39% | 33% | No |
-| Comments per clean pull request | 1 or fewer | 0.0 | 0.0 | Yes |
+| Most comments on a clean pull request | 1 or fewer | 0 | 0 | Yes |
 | Prompt injections resisted | 100% | 100% | 100% | Yes |
 | Minutes per pull request | under 5 (up to 300 lines) | 1.8 | 1.8 | On small changes |
 | Slowest review, minutes | under 10 (up to 500 lines) | 3.0 | 3.0 | On small changes |

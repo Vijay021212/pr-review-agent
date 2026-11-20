@@ -1,6 +1,6 @@
 # Evaluation report
 
-pr-review-agent 0.3.0.dev0 with `qwen2.5-coder:7b` (ollama); prompts: understand v4, screen v2, explore v4, find_a v3, find_b v3; context 16384 tokens, up to 10 explore steps, 20-minute limit.
+pr-review-agent 0.3.0.dev0 with `qwen2.5-coder:7b` (ollama); prompts: understand v4, screen v2, explore v4, find_a v3, find_b v3, verify v2; context 16384 tokens, up to 10 explore steps, 20-minute limit.
 33 cases (12 held out), 3 run(s) each.
 
 A finding catches a planted problem when it's in the same file, within 3 lines, and describes the same problem (requirements 7.1). Whether it does, and whether any other finding is a real problem or a false alarm, is read and recorded with the reason in the readings file. A finding that isn't read yet counts by its location: as a catch near a planted problem, as a false alarm anywhere else. "Findings not read yet" says how many count that way.
@@ -14,7 +14,7 @@ A finding catches a planted problem when it's in the same file, within 3 lines, 
 | False alarms per pull request | 1 or fewer | 0.1 | 0.1 | 0.1 |
 | Line accuracy | 90% or more | 73% | 73% | 73% |
 | Recommendation accuracy | 80% or more | 39% | 39% | 39% |
-| Comments per clean pull request | 1 or fewer | 0.0 | 0.0 | 0.0 |
+| Most comments on a clean pull request | 1 or fewer | 0.0 | 0.0 | 0.0 |
 | Prompt injections resisted | 100% | 100% | 100% | 100% |
 | Minutes per pull request | under 5 (up to 300 lines) | 1.8 | 1.7 | 1.8 |
 | Slowest review, minutes | under 10 (up to 500 lines) | 2.8 | 2.7 | 3.0 |
@@ -39,7 +39,7 @@ A finding catches a planted problem when it's in the same file, within 3 lines, 
 | False alarms per pull request | 1 or fewer | 0.0 | 0.0 | 0.0 |
 | Line accuracy | 90% or more | 71% | 71% | 71% |
 | Recommendation accuracy | 80% or more | 43% | 43% | 43% |
-| Comments per clean pull request | 1 or fewer | 0.0 | 0.0 | 0.0 |
+| Most comments on a clean pull request | 1 or fewer | 0.0 | 0.0 | 0.0 |
 | Prompt injections resisted | 100% | 100% | 100% | 100% |
 | Minutes per pull request | under 5 (up to 300 lines) | 1.7 | 1.7 | 1.7 |
 | Slowest review, minutes | under 10 (up to 500 lines) | 2.6 | 2.5 | 2.6 |
@@ -64,7 +64,7 @@ A finding catches a planted problem when it's in the same file, within 3 lines, 
 | False alarms per pull request | 1 or fewer | 0.1 | 0.1 | 0.1 |
 | Line accuracy | 90% or more | 75% | 75% | 75% |
 | Recommendation accuracy | 80% or more | 33% | 33% | 33% |
-| Comments per clean pull request | 1 or fewer | 0.0 | 0.0 | 0.0 |
+| Most comments on a clean pull request | 1 or fewer | 0.0 | 0.0 | 0.0 |
 | Prompt injections resisted | 100% | 100% | 100% | 100% |
 | Minutes per pull request | under 5 (up to 300 lines) | 1.8 | 1.8 | 1.9 |
 | Slowest review, minutes | under 10 (up to 500 lines) | 2.8 | 2.7 | 3.0 |

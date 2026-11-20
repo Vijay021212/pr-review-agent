@@ -19,7 +19,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
-import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from pr_review_agent.domain import (
@@ -32,7 +31,10 @@ from pr_review_agent.domain import (
     RecommendationValue,
     ReviewLevel,
     SetupError,
+    field_place,
+    invalid_values,
 )
+from pr_review_agent.evaluation.yaml_files import read_yaml
 from pr_review_agent.github.diff import parse_patch
 
 CASE_FILE = "case.yaml"
@@ -113,13 +115,15 @@ def load_cases(folder: Path) -> tuple[Case, ...]:
 
 
 def load_case(folder: Path) -> Case:
+    path = folder / CASE_FILE
+    raw = read_yaml(path, what="The evaluation case file", fix=f"Correct {path}.") or {}
     try:
-        raw = yaml.safe_load((folder / CASE_FILE).read_text(encoding="utf-8")) or {}
         spec = CaseSpec.model_validate(raw)
-    except (yaml.YAMLError, ValidationError) as error:
+    except ValidationError as error:
         raise SetupError(
-            f"The evaluation case {folder.name} has an invalid {CASE_FILE}: {error}",
-            f"Correct {folder / CASE_FILE}.",
+            f"The evaluation case {folder.name} has an invalid {CASE_FILE}: "
+            f"{invalid_values(error, field_place)}.",
+            f"Correct {path}.",
         ) from None
     if spec.kind is CaseKind.CLEAN and spec.problems:
         raise SetupError(
