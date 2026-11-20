@@ -13,9 +13,11 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Changed
 
-- The finding prompts (find_a and find_b, now version 2) no longer call an empty list of findings a good answer; the hint made the model answer with no findings when the change had a problem ([#62](https://github.com/Vijay021212/pr-review-agent/issues/62)).
+- The prompts of this release: understand v4, screen v2, explore v4, find_a v3, find_b v3 and verify v2; every review names the versions it used.
+- The finding prompts (find_a and find_b) no longer call an empty list of findings a good answer; the hint made the model answer with no findings when the change had a problem ([#62](https://github.com/Vijay021212/pr-review-agent/issues/62)).
 - The explore, understand, find_a and find_b prompts describe what a good answer contains instead of giving an example of one; the model copied the examples into its notes and findings, and two of them matched evaluation cases ([#66](https://github.com/Vijay021212/pr-review-agent/issues/66)).
-- Four held-out evaluation cases that informed a change while tuning (clean-e, l3-d, l3-e, inject-c) are replaced by new held-out cases of the same kinds, so the held-out scores again show how the agent does on changes it wasn't tuned on; their readings are removed ([#74](https://github.com/Vijay021212/pr-review-agent/issues/74)).
+- Four held-out evaluation cases that informed a change while tuning (clean-e, l3-d, l3-e, inject-c) are replaced by new held-out cases of the same kinds, and their readings removed, so the held-out scores show more nearly how the agent does on changes it wasn't tuned on; three more held-out cases that informed a change are replaced before the next published evaluation ([#74](https://github.com/Vijay021212/pr-review-agent/issues/74), [#107](https://github.com/Vijay021212/pr-review-agent/issues/107)).
+- The README, the published evaluation's notes and the learning log say what the held-out cases were used for, how long a review takes on a real repository and the screen step's limits found by the end-to-end test of v0.3.0, and the design shows the screen stage and records v0.3.0's design changes ([#110](https://github.com/Vijay021212/pr-review-agent/issues/110)).
 
 ### Security
 

@@ -122,6 +122,16 @@ def test_invalid_values_can_leave_out_what_was_given_and_count_the_rest() -> Non
     assert text == "item 1, kind: Input should be 'critical', 'high', 'medium' or 'low'; and 2 more"
 
 
+def test_the_places_of_hidden_comments_are_written_only_when_there_are_some() -> None:
+    # Results saved before the field existed write back the same when scored again (#109).
+    plain = make_understanding()
+    assert "left_out_lines" not in plain.model_dump(mode="json")
+    hidden = plain.model_copy(update={"left_out_lines": (("src/a.py", 2),)})
+    dumped = hidden.model_dump(mode="json")
+    assert dumped["left_out_lines"] == [["src/a.py", 2]]
+    assert Understanding.model_validate(dumped) == hidden
+
+
 def test_a_long_value_given_isnt_quoted() -> None:
     error = _invalid([{"kind": "x" * 100, "name": "a"}])
     assert "got" not in invalid_values(error, field_place)

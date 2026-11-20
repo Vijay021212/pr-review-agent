@@ -102,8 +102,9 @@ change at a time.
   | Clean change | 5 | No comments, Approve |
   | Prompt injection | 3 | The agent isn't fooled |
 
-  12 of them are **held out**: never looked at while tuning, so their scores show how the
-  agent does on changes it wasn't tuned on.
+  12 of them are **held out**: since #80, development runs use only the other 21, so the
+  held-out scores show how the agent does on changes it wasn't tuned on. Until then,
+  development evaluations read them too, and three of them informed a change (#107).
 - **Readings** (`eval/readings.yaml`, #64): a person's verdict on every finding (same problem,
   real problem or false alarm), reused whenever the same finding comes back, and
   `--rescore` to score a finished evaluation again in seconds.
@@ -172,13 +173,15 @@ read, nothing tuned before or during the run. Everything is in `eval/published/0
 | False alarms per pull request | 1 or fewer | 0.1 | 0.0 | 0.1 |
 | Line accuracy | 90% | 73% | 71% | 75% |
 | Recommendation accuracy | 80% | 39% | 43% | 33% |
-| Comments per clean pull request | 1 or fewer | 0.0 | 0.0 | 0.0 |
+| Most comments on a clean pull request | 1 or fewer | 0 | 0 | 0 |
 | Prompt injections resisted | 100% | 100% | 100% | 100% |
 | Minutes per pull request | under 5 | 1.8 | 1.7 | 1.8 |
 
 What it showed:
 
-- **No overfitting:** the held-out cases score like the tuning cases (40% and 41% caught).
+- **Held-out cases score like tuning ones** (40% and 41% caught). That would show no
+  overfitting, but the milestone review later found three held-out cases had informed a
+  change (#107), so it's weaker evidence than it looks.
 - **Fully repeatable this time:** all three runs gave the same findings and the same
   recommendation in every case.
 - **Reading mattered again:** 3 findings in held-out cases had never been read. Counted by
@@ -193,6 +196,31 @@ What it showed:
   tokens, and nothing was cut to fit. But the cases have at most 21 changed lines, so the
   speed targets for 300 and 500 lines are still unmeasured.
 - **Every gap has its own issue** (#92 to #100), in the v1.0.0 milestone.
+
+### The end-to-end test and the milestone review
+
+Before the release, v0.3.0 was tested as a user gets it: a fresh clone, the built package
+installed in a clean environment, 18 error cases, and real reviews with the model, posting on
+a test pull request and reviewing it again. Then ten independent reviewers read every issue of
+the milestone against the code, and a skeptic tried to refute each gap they claimed: 23 of 34
+held.
+
+| Found by | What was wrong | Handled in |
+|---|---|---|
+| End-to-end test | The screen quoted two ordinary sentences and missed the order between them | #104 (v1.0.0) |
+| End-to-end test | Reviewing again posted the same finding twice, reworded | #25 (v1.0.0) |
+| End-to-end test | On real repositories a review took 2 min 47 s to 6 min 50 s, over the 5-minute target the first time | #98 (v1.0.0) |
+| End-to-end test | Raw validation errors, and Windows line endings in the published files | #108 |
+| End-to-end test | Bare file names listed as risky parts | #109 |
+| Milestone review | A comment that repeats a line of code could hide that line from the review | #109 |
+| Milestone review | Scoring: an earlier finding could take a catch from the one that described it, and clean changes were averaged | #108 |
+| Milestone review | Three held-out cases had informed a change | #107, and the docs say so |
+| Milestone review | Six stage changes without an integration test, and a design that didn't show the screen | #110 |
+| Writing those tests | 63 of 66 findings named no other place they affect, a field that's optional in the answer | #111 (v1.0.0) |
+
+Every fix made before the release was shown to change nothing the model reads in any case:
+all 258 messages of the 33 cases are the same, and the published evaluation rescores to the same
+scores, so they still describe the released code.
 
 ### Problems & fixes
 
@@ -241,6 +269,16 @@ What it showed:
   targets for big pull requests (#98).
 - **A published score must be reproducible:** the commit, the model and settings, the
   readings, and `--rescore` writing the same files again, byte for byte.
+- **Test the real thing, not only the evaluation:** the evaluation's injection cases are
+  mostly the order itself; one realistic description showed the screen's weakness (#104).
+- **An independent review finds what the builder can't see, and a skeptic keeps it honest:**
+  34 gaps claimed, 23 confirmed, 11 refuted.
+- **Compute a measure the way its target is written:** "1 or fewer each" is a maximum, not
+  an average (#108).
+- **Prove a fix safe by what the model reads:** when every message is the same, the published
+  scores still hold for the new code (#109).
+- **Held-out data is easy to contaminate without noticing:** keep a record of every case a
+  change looks at (#107).
 
 ### Where we are
 
