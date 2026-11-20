@@ -20,7 +20,14 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Protocol, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+    model_validator,
+)
 
 # --- Errors ------------------------------------------------------------------------------
 
@@ -36,6 +43,60 @@ class SetupError(Exception):
         super().__init__(f"{problem}\nHow to fix it: {fix}")
         self.problem = problem
         self.fix = fix
+
+
+Location = tuple[int | str, ...]  # where a value is, as Pydantic gives it: ("problems", 0, "level")
+GIVEN_CHARS = 60  # a given value longer than this isn't quoted in an error
+
+
+def invalid_values(
+    error: ValidationError,
+    place: Callable[[Location], str],
+    *,
+    show_given: bool = True,
+    most: int | None = None,
+) -> str:
+    """Pydantic's error as "where: what's wrong" for each problem, joined by semicolons,
+    without the library's error codes and links (FR-16).
+
+    `place` names where a problem is. The value that was given is quoted after the problem,
+    "(got 'Maybe')", unless `show_given` is false, as for settings, which can hold secrets.
+    With `most`, only the first problems are given, and how many more there are.
+    """
+    items = error.errors(include_url=False)
+    shown = items if most is None else items[:most]
+    problems = []
+    for item in shown:
+        message = item["msg"].removeprefix("Value error, ")
+        given = item.get("input")
+        if (
+            show_given
+            and item["type"] != "missing"
+            and isinstance(given, str | int | float)
+            and len(repr(given)) <= GIVEN_CHARS
+        ):
+            message += f" (got {given!r})"
+        where = place(tuple(item["loc"]))
+        problems.append(f"{where}: {message}" if where else message)
+    if len(items) > len(shown):
+        problems.append(f"and {len(items) - len(shown)} more")
+    return "; ".join(problems)
+
+
+def field_place(location: Location, items: str = "item") -> str:
+    """Where a value is in a YAML or JSON file, in words, counted from 1.
+
+    ("problems", 0, "level") is "problem 1, level". A list at the top of the file is named by
+    `items`: (0, "verdict") with items="reading" is "reading 1, verdict".
+    """
+    words: list[str] = []
+    for part in location:
+        if isinstance(part, int):
+            name = words.pop() if words else items
+            words.append(f"{name.removesuffix('s')} {part + 1}")
+        else:
+            words.append(part)
+    return ", ".join(words)
 
 
 class ReviewIncomplete(Exception):

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from pr_review_agent import domain
 from pr_review_agent.domain import (
@@ -40,6 +40,8 @@ from pr_review_agent.domain import (
     StageTiming,
     TimeLimitReached,
     Understanding,
+    field_place,
+    invalid_values,
 )
 from tests.builders import SHA, make_file, make_finding, make_pull_request
 from tests.fakes import FakeChatModel, FakeGitHub
@@ -73,6 +75,56 @@ def test_setup_error_says_what_is_wrong_and_how_to_fix_it() -> None:
     error = SetupError("Ollama isn't running.", "Start the Ollama app.")
     assert str(error) == "Ollama isn't running.\nHow to fix it: Start the Ollama app."
     assert (error.problem, error.fix) == ("Ollama isn't running.", "Start the Ollama app.")
+
+
+class _Entry(BaseModel):
+    kind: Severity
+    name: str
+    note: str = ""
+
+
+def _invalid(data: object) -> ValidationError:
+    with pytest.raises(ValidationError) as caught:
+        TypeAdapter(list[_Entry]).validate_python(data)
+    return caught.value
+
+
+@pytest.mark.parametrize(
+    ("location", "items", "place"),
+    [
+        (("problems", 0, "level"), "item", "problem 1, level"),
+        ((0, "verdict"), "reading", "reading 1, verdict"),
+        ((2,), "item", "item 3"),
+        (("recommendation",), "item", "recommendation"),
+        ((), "item", ""),
+    ],
+)
+def test_a_place_in_a_file_is_named_in_words_counted_from_1(
+    location: tuple[int | str, ...], items: str, place: str
+) -> None:
+    assert field_place(location, items=items) == place
+
+
+def test_invalid_values_say_where_and_what_without_the_librarys_codes() -> None:
+    error = _invalid([{"kind": "huge", "name": "a"}, {"kind": "low"}])
+    text = invalid_values(error, lambda location: field_place(location, items="entry"))
+    assert text == (
+        "entry 1, kind: Input should be 'critical', 'high', 'medium' or 'low' (got 'huge'); "
+        "entry 2, name: Field required"
+    )
+    assert "type=" not in text
+    assert "pydantic.dev" not in text
+
+
+def test_invalid_values_can_leave_out_what_was_given_and_count_the_rest() -> None:
+    error = _invalid([{"kind": "huge", "name": 5}, {"kind": "tiny", "name": "b"}])
+    text = invalid_values(error, field_place, show_given=False, most=1)
+    assert text == "item 1, kind: Input should be 'critical', 'high', 'medium' or 'low'; and 2 more"
+
+
+def test_a_long_value_given_isnt_quoted() -> None:
+    error = _invalid([{"kind": "x" * 100, "name": "a"}])
+    assert "got" not in invalid_values(error, field_place)
 
 
 def test_time_limit_reached_is_an_incomplete_review() -> None:

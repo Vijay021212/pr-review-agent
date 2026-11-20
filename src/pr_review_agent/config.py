@@ -14,7 +14,7 @@ from typing import Annotated, Any
 from pydantic import AliasChoices, Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from pr_review_agent.domain import NonEmptyStr, SetupError
+from pr_review_agent.domain import NonEmptyStr, SetupError, invalid_values
 
 
 class Provider(StrEnum):
@@ -96,16 +96,15 @@ class Settings(BaseSettings):
 
 
 def _setup_error(error: ValidationError) -> SetupError:
-    """Turn Pydantic's error into one message that names each variable to fix."""
-    problems = []
-    for item in error.errors():
-        message = item["msg"].removeprefix("Value error, ")
-        field = str(item["loc"][0]) if item["loc"] else ""
-        if field:
-            message = f"{_variable_name(field)}: {message}"
-        problems.append(message)
+    """Turn Pydantic's error into one message that names each variable to fix. The values
+    given are never repeated: a setting can be a secret (FR-21)."""
+    problems = invalid_values(
+        error,
+        lambda location: _variable_name(str(location[0])) if location else "",
+        show_given=False,
+    )
     return SetupError(
-        "The settings are invalid: " + "; ".join(problems) + ".",
+        "The settings are invalid: " + problems + ".",
         "Correct these variables in your environment or .env file. "
         "Every setting is listed in the README under Settings.",
     )

@@ -23,12 +23,19 @@ import hashlib
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
-import yaml
 from pydantic import BaseModel, ConfigDict, StringConstraints, TypeAdapter, ValidationError
 
-from pr_review_agent.domain import Finding, NonEmptyStr, SetupError
+from pr_review_agent.domain import (
+    Finding,
+    Location,
+    NonEmptyStr,
+    SetupError,
+    field_place,
+    invalid_values,
+)
+from pr_review_agent.evaluation.yaml_files import read_yaml
 
 READINGS_FILE = "readings.yaml"  # next to the cases folder: eval/readings.yaml
 FINGERPRINT_LENGTH = 12
@@ -99,11 +106,12 @@ def load_readings(path: Path) -> Readings:
     if not path.is_file():
         return NO_READINGS
     fix = f"Correct {path}: a list of readings, each with case, finding, verdict and reason."
+    raw = read_yaml(path, what="The readings file", fix=fix) or []
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or []
         readings = _READING_LIST.validate_python(raw)
-    except (yaml.YAMLError, ValidationError) as error:
-        raise SetupError(f"The readings file {path} is invalid: {error}", fix) from None
+    except ValidationError as error:
+        problems = invalid_values(error, lambda location: _place(raw, location))
+        raise SetupError(f"The readings file {path} is invalid: {problems}.", fix) from None
     by_finding: dict[tuple[str, str], Reading] = {}
     for reading in readings:
         key = (reading.case, reading.finding)
@@ -115,3 +123,17 @@ def load_readings(path: Path) -> Readings:
             )
         by_finding[key] = reading
     return Readings(by_finding)
+
+
+def _place(raw: Any, location: Location) -> str:
+    """Where a problem is in the readings file: the reading's number, with its case and
+    finding when it has them, for example "reading 3 (l2-d-end-date, 4063f76f67b8), verdict"."""
+    place = field_place(location, items="reading")
+    index = location[0] if location else None
+    if isinstance(index, int) and isinstance(raw, list) and index < len(raw):
+        entry = raw[index]
+        if isinstance(entry, dict) and entry.get("case") and entry.get("finding"):
+            first, _, rest = place.partition(", ")
+            named = f"{first} ({entry['case']}, {entry['finding']})"
+            place = f"{named}, {rest}" if rest else named
+    return place

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +37,7 @@ from pr_review_agent.evaluation.report import (
 from pr_review_agent.evaluation.runner import run_evaluation
 from pr_review_agent.evaluation.scoring import CaseRun, match_findings, score, summarize
 from pr_review_agent.sensitive import find_sensitive
+from pr_review_agent.version import __version__
 from tests.builders import make_finding, make_result
 from tests.fakes import EXPLORE_DONE, KEEP_ONE, NOTHING_TO_SCREEN, FakeChatModel
 
@@ -182,6 +185,39 @@ def test_a_file_that_isnt_text_is_refused_with_its_name(tmp_path: Path) -> None:
     assert caught.value.fix.startswith("Cases hold source files only")
 
 
+def test_a_wrong_case_yaml_names_each_field_and_the_value_given(tmp_path: Path) -> None:
+    spec = {"recommendation": "Maybe", "problems": [{**PROBLEM, "level": 9}]}
+    with pytest.raises(SetupError) as caught:
+        load_case(write_case(tmp_path, "c", spec=spec))
+    assert caught.value.problem == (
+        "The evaluation case c has an invalid case.yaml: recommendation: Input should be "
+        "'Approve', 'Request Changes' or 'Needs Human Review' (got 'Maybe'); problem 1, level: "
+        "Input should be 1, 2, 3, 4 or 5 (got 9)."
+    )
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ("title: [unclosed\n", r"isn't valid YAML: .* \(line 2, column 1\)"),
+        ("title: a\x07b\n", "isn't valid YAML: unacceptable character #x0007: .* at position 8"),
+        (None, "isn't UTF-8 text"),  # the file is saved as UTF-16, as Windows tools often do
+    ],
+)
+def test_a_case_yaml_that_cant_be_read_is_named(
+    tmp_path: Path, content: str | None, message: str
+) -> None:
+    folder = write_case(tmp_path, "c")
+    path = folder / "case.yaml"
+    if content is None:
+        path.write_text(path.read_text(encoding="utf-8"), encoding="utf-16")
+    else:
+        path.write_text(content, encoding="utf-8")
+    with pytest.raises(SetupError, match=message) as caught:
+        load_case(folder)
+    assert str(path) in caught.value.problem
+
+
 # --- The fixture -----------------------------------------------------------------------
 
 
@@ -251,6 +287,45 @@ def test_one_problem_is_caught_by_one_finding_only(tmp_path: Path) -> None:
     assert (second.finding.line, second.problem is None) == (5, True)
 
 
+def test_a_finding_read_as_another_problem_leaves_the_catch_to_one_that_describes_it(
+    tmp_path: Path,
+) -> None:
+    other, describes = finding(2), finding(4, explanation="Divides by zero for no ratings.")
+    readings = readings_for(
+        tmp_path, reading_of(other, "real problem"), reading_of(describes, "same problem")
+    )
+    run = case_run(tmp_path, other, describes)
+    first, second = match_findings(run.case, run.findings, readings)
+    assert (first.finding.line, first.problem, first.near is not None) == (2, None, True)
+    assert (second.finding.line, second.catches, second.exact) == (4, True, True)
+    scores = score([run], readings)
+    assert (scores.catch_rate, scores.precision, scores.line_accuracy) == (1.0, 1.0, 1.0)
+
+
+def test_without_readings_the_nearest_finding_catches_the_problem(tmp_path: Path) -> None:
+    run = case_run(tmp_path, finding(1), finding(4))
+    first, second = match_findings(run.case, run.findings)
+    # Near the problem but not catching it: right by its location, and no false alarm.
+    assert (first.finding.line, first.problem, first.verdict) == (1, None, Verdict.SAME_PROBLEM)
+    assert (second.finding.line, second.catches, second.exact) == (4, True, True)
+    scores = score([run])
+    assert (scores.catch_rate, scores.precision, scores.line_accuracy) == (1.0, 1.0, 1.0)
+    assert scores.false_alarms_per_pr == 0
+
+
+def test_a_real_problem_inside_the_planted_lines_is_near_them_without_catching(
+    tmp_path: Path,
+) -> None:
+    inside = finding(4)
+    readings = readings_for(tmp_path, reading_of(inside, "real problem"))
+    run = case_run(tmp_path, inside)
+    (match,) = match_findings(run.case, run.findings, readings)
+    assert (match.near is not None, match.problem, match.catches) == (True, None, False)
+    data = json.loads(results_json([run], runs=1, settings_line="s", readings=readings))
+    assert data["reviews"][0]["findings"][0]["near_line"] == 4
+    assert "near the planted problem at line 4" in render_review_sheet([run], readings)
+
+
 def test_scores_for_a_caught_problem(tmp_path: Path) -> None:
     scores = score([case_run(tmp_path, finding(4))])
     assert (scores.catch_rate, scores.precision, scores.line_accuracy) == (1.0, 1.0, 1.0)
@@ -274,7 +349,7 @@ def test_clean_and_injection_cases(tmp_path: Path) -> None:
     )
     injection = case_run(tmp_path, finding(4), name="inj", kind="injection")
     scores = score([clean, injection])
-    assert scores.clean_comments_per_pr == 1.0
+    assert scores.most_clean_comments == 1
     assert scores.injection_resisted == 1.0  # expected Request Changes, got it
     assert scores.recommendation_accuracy == 0.5
 
@@ -284,6 +359,27 @@ def test_an_incomplete_review_counts_as_a_miss(tmp_path: Path) -> None:
     scores = score([CaseRun(case, 1, None, "the model failed", 30)])
     assert (scores.incomplete, scores.catch_rate, scores.recommendation_accuracy) == (1, 0.0, 0.0)
     assert scores.minutes_per_pr is None
+
+
+CLEAN: dict[str, Any] = {"kind": "clean", "problems": [], "recommendation": "Approve"}
+
+
+def test_the_clean_change_target_is_checked_per_pull_request(tmp_path: Path) -> None:
+    noisy = case_run(tmp_path, finding(1), finding(2), finding(3), name="noisy", **CLEAN)
+    quiet = [case_run(tmp_path, name=f"quiet{n}", **CLEAN) for n in range(4)]
+    # 3 comments on one clean change is over "1 or fewer each"; an average (0.6) would hide it.
+    assert score([noisy, *quiet]).most_clean_comments == 3
+
+
+def test_an_incomplete_review_isnt_counted_as_one_without_false_alarms(tmp_path: Path) -> None:
+    noisy = case_run(tmp_path, finding(1, file="src/other.py"), name="noisy", **CLEAN)
+    stopped = CaseRun(load_case(write_case(tmp_path, "stopped", spec=CLEAN)), 1, None, "t", 9)
+    scores = score([noisy, stopped])
+    assert (scores.incomplete, scores.false_alarms_per_pr, scores.most_clean_comments) == (
+        1,
+        1.0,
+        1,
+    )
 
 
 def test_a_slow_small_review_is_over_its_time_target(tmp_path: Path) -> None:
@@ -311,7 +407,7 @@ def test_repeat_runs_give_the_average_lowest_and_highest(tmp_path: Path) -> None
     assert spread.average == pytest.approx(2 / 3)
     assert (spread.lowest, spread.highest) == (0.0, 1.0)
     assert summary.spread("all", "catch_rate_by_level", 2).highest == 1.0
-    assert summary.spread("all", "clean_comments_per_pr").average is None
+    assert summary.spread("all", "most_clean_comments").average is None
     assert set(summary.by_subset) == {"all", "tuning", "held out"}
 
 
@@ -324,7 +420,7 @@ def test_the_report_shows_every_measure_against_its_target(tmp_path: Path) -> No
     assert report.startswith("# Evaluation report")
     assert "1 cases (0 held out), 1 run(s) each." in report
     assert "| Catch rate | 60% or more | 100% | 100% | 100% |" in report
-    assert "| Comments per clean pull request | 1 or fewer | n/a | n/a | n/a |" in report
+    assert "| Most comments on a clean pull request | 1 or fewer | n/a | n/a | n/a |" in report
     assert "| 2 | 100% | 100% |" in report
     assert "| c | planted | no | Request Changes | Request Changes | 1/1 | 1.0 |" in report
     assert "## Held out cases" not in report
@@ -373,12 +469,59 @@ def test_the_results_hold_every_review_in_full(tmp_path: Path) -> None:
     run = case_run(tmp_path, finding(4))
     data = json.loads(results_json([run], runs=1, settings_line="context 16384 tokens"))
     assert (data["format"], data["runs"], data["settings"]) == (2, 1, "context 16384 tokens")
+    assert data["version"] == __version__  # of the agent that made the reviews
     (review,) = data["reviews"]
     assert (review["case"], review["recommendation"]) == ("c", "Request Changes")
     (found,) = review["findings"]
     assert found["finding"] == fingerprint(finding(4))
     assert (found["near_line"], found["verdict"], found["read"]) == (4, "same problem", False)
     assert review["result"]["findings"]["kept"][0]["explanation"] == finding(4).explanation
+
+
+def _with_prompts(run: CaseRun, *prompts: str) -> CaseRun:
+    assert run.result is not None
+    return replace(run, result=run.result.model_copy(update={"prompt_versions": prompts}))
+
+
+def test_the_report_names_every_prompt_and_the_version_that_reviewed(tmp_path: Path) -> None:
+    runs = [
+        # Nothing found, so no double-check call: its prompt is only in the second review.
+        _with_prompts(case_run(tmp_path, name="a"), "understand v4", "find_a v3"),
+        _with_prompts(
+            case_run(tmp_path, finding(4), name="b"), "understand v4", "find_a v3", "verify v2"
+        ),
+    ]
+    report = render_report(summarize(runs, 1), runs, settings_line="s", version="0.9.0")
+    assert report.splitlines()[2] == (
+        "pr-review-agent 0.9.0 with `qwen2.5-coder:7b` (ollama); "
+        "prompts: understand v4, find_a v3, verify v2; s."
+    )
+
+
+def test_results_that_dont_record_the_version_say_so(tmp_path: Path) -> None:
+    cases = tmp_path / "cases"
+    write_evaluation(tmp_path / "out", [case_run(cases, finding(4))], runs=1, settings_line="s")
+    path = tmp_path / "out" / "results.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    del data["version"]  # written before the version was recorded
+    path.write_text(json.dumps(data), encoding="utf-8")
+    finished = load_results(tmp_path / "out", load_cases(cases))
+    assert finished.version is None
+    report = render_report(
+        summarize(finished.case_runs, 1),
+        finished.case_runs,
+        settings_line="s",
+        version=finished.version,
+    )
+    assert report.splitlines()[2].startswith("pr-review-agent (version not recorded) with")
+
+
+def test_the_files_have_unix_line_endings_on_every_platform(tmp_path: Path) -> None:
+    write_evaluation(
+        tmp_path, [case_run(tmp_path / "cases", finding(4))], runs=1, settings_line="s"
+    )
+    for name in ("report.md", "review-sheet.md", "results.json"):
+        assert b"\r" not in (tmp_path / name).read_bytes()
 
 
 # --- Running it ------------------------------------------------------------------------
@@ -616,6 +759,34 @@ def test_a_finding_read_twice_is_refused(tmp_path: Path) -> None:
         readings_for(tmp_path, entry, {**entry, "verdict": "false alarm"})
 
 
+def test_a_wrong_reading_is_named_by_its_number_case_and_finding(tmp_path: Path) -> None:
+    path = tmp_path / "readings.yaml"
+    path.write_text(
+        "- case: c\n  finding: 0123456789ab\n  verdict: maybe\n  reason: x\n", encoding="utf-8"
+    )
+    with pytest.raises(SetupError) as caught:
+        load_readings(path)
+    assert caught.value.problem == (
+        f"The readings file {path} is invalid: reading 1 (c, 0123456789ab), verdict: Input "
+        "should be 'same problem', 'real problem' or 'false alarm' (got 'maybe')."
+    )
+
+
+def test_a_reading_without_its_finding_is_named_by_its_number(tmp_path: Path) -> None:
+    path = tmp_path / "readings.yaml"
+    path.write_text("- case: c\n  verdict: false alarm\n  reason: x\n", encoding="utf-8")
+    with pytest.raises(SetupError, match="invalid: reading 1, finding: Field required"):
+        load_readings(path)
+
+
+def test_a_readings_file_that_isnt_utf8_is_named(tmp_path: Path) -> None:
+    path = tmp_path / "readings.yaml"
+    path.write_text("- case: c\n", encoding="utf-16")
+    with pytest.raises(SetupError, match="isn't UTF-8 text") as caught:
+        load_readings(path)
+    assert (str(path) in caught.value.problem, caught.value.fix) == (True, "Save it as UTF-8.")
+
+
 def test_a_finding_near_the_problem_but_about_something_else_is_no_catch(tmp_path: Path) -> None:
     near = finding(4)
     readings = readings_for(tmp_path, reading_of(near, "false alarm"))
@@ -665,9 +836,9 @@ def test_the_results_load_back_as_they_were(tmp_path: Path) -> None:
     cases = tmp_path / "cases"
     done = case_run(cases, finding(4), seconds=90)
     stopped = CaseRun(load_case(write_case(cases, "d")), 1, None, "timed out", 9)
-    write_evaluation(tmp_path / "out", [done, stopped], runs=1, settings_line="s")
-    loaded, runs, settings_line = load_results(tmp_path / "out", load_cases(cases))
-    assert (runs, settings_line) == (1, "s")
+    write_evaluation(tmp_path / "out", [done, stopped], runs=1, settings_line="s", version="0.9.0")
+    loaded, runs, settings_line, version = load_results(tmp_path / "out", load_cases(cases))
+    assert (runs, settings_line, version) == (1, "s", "0.9.0")
     assert loaded[0].result == done.result
     assert (loaded[0].case.name, loaded[0].run, loaded[0].seconds) == ("c", 1, 90.0)
     assert (loaded[1].result, loaded[1].incomplete) == (None, "timed out")
@@ -688,8 +859,21 @@ def test_scoring_again_refuses_a_case_changed_since(tmp_path: Path) -> None:
         (None, "There's no results.json"),
         ("not json", "isn't valid JSON"),
         ('[{"case": "c"}]', "earlier version"),  # format 1 was a list of locations
-        ('{"format": 2, "reviews": [{"case": "gone"}]}', "isn't in the cases folder"),
-        ('{"format": 2, "reviews": [{"case": "c"}]}', "is damaged"),
+        (
+            '{"format": 2, "runs": 1, "settings": "s", "reviews": [{"case": "gone"}]}',
+            "isn't in the cases folder",
+        ),
+        (
+            '{"format": 2, "runs": 1, "settings": "s", "reviews": [{"case": "c"}]}',
+            r"is damaged: review 1 \(c\) has no 'result'",
+        ),
+        ('{"format": 2, "reviews": []}', "is damaged: it has no 'runs'"),
+        ('{"format": 2, "runs": 1, "settings": "s", "reviews": {}}', "reviews aren't a list"),
+        ('{"format": 2, "runs": 1, "settings": "s", "reviews": [7]}', "review 1 isn't a review"),
+        (
+            '{"format": 2, "runs": 1, "settings": "s", "reviews": [{"case": ["c"]}]}',
+            "review 1 has no case name",
+        ),
     ],
 )
 def test_scoring_again_needs_the_full_results_of_these_cases(
@@ -704,6 +888,44 @@ def test_scoring_again_needs_the_full_results_of_these_cases(
         load_results(out, load_cases(tmp_path / "cases"))
 
 
+def _drop_seconds(data: dict[str, Any]) -> None:
+    del data["reviews"][0]["seconds"]
+
+
+def _drop_runs(data: dict[str, Any]) -> None:
+    del data["runs"]
+
+
+def _break_the_model(data: dict[str, Any]) -> None:
+    data["reviews"][0]["result"]["model"] = None
+
+
+@pytest.mark.parametrize(
+    ("damage", "message"),
+    [
+        (_drop_seconds, "review 1 (c, run 1) has no 'seconds'."),
+        (_drop_runs, "it has no 'runs'."),
+        (
+            _break_the_model,
+            "review 1 (c, run 1) holds a review that isn't valid: model: Input should be a "
+            "valid string.",
+        ),
+    ],
+)
+def test_damaged_results_name_the_review_and_what_is_wrong(
+    tmp_path: Path, damage: Callable[[dict[str, Any]], None], message: str
+) -> None:
+    cases = tmp_path / "cases"
+    write_evaluation(tmp_path / "out", [case_run(cases, finding(4))], runs=1, settings_line="s")
+    path = tmp_path / "out" / "results.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    damage(data)
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SetupError) as caught:
+        load_results(tmp_path / "out", load_cases(cases))
+    assert caught.value.problem == f"{path} is damaged: {message}"
+
+
 def _no_model(settings: Settings) -> None:
     raise AssertionError("scoring again, or failing early, must not build a model")
 
@@ -713,7 +935,9 @@ def test_the_eval_command_scores_a_finished_evaluation_again(
 ) -> None:
     cases = tmp_path / "eval" / "cases"
     results = tmp_path / "results"
-    write_evaluation(results, [case_run(cases, finding(4))], runs=1, settings_line="16k tokens")
+    write_evaluation(
+        results, [case_run(cases, finding(4))], runs=1, settings_line="16k tokens", version="0.9.0"
+    )
     assert "| Catch rate | 60% or more | 100%" in (results / "report.md").read_text("utf-8")
     write_readings(tmp_path / "eval" / "readings.yaml", reading_of(finding(4), "false alarm"))
     monkeypatch.setattr("pr_review_agent.factory.build_model", _no_model)
@@ -721,6 +945,8 @@ def test_the_eval_command_scores_a_finished_evaluation_again(
     report = (results / "report.md").read_text(encoding="utf-8")
     assert "| Catch rate | 60% or more | 0% |" in report
     assert "16k tokens" in report
+    # Scored again by this version, the reviews keep the version that made them.
+    assert report.splitlines()[2].startswith("pr-review-agent 0.9.0 with")
     assert "Reading: **false alarm**" in (results / "review-sheet.md").read_text("utf-8")
     assert f"written to {results}" in capsys.readouterr().err
 
