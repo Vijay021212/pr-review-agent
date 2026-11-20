@@ -32,7 +32,7 @@ from pr_review_agent.domain import (
     Understanding,
 )
 from pr_review_agent.project_map import build_project_map
-from pr_review_agent.prompts import clip, data_block, load
+from pr_review_agent.prompts import clip, data_block, leave_out, load
 from pr_review_agent.selection import EXPLORED_TOKENS
 from pr_review_agent.stages import ModelCall, ask, changed_files_list, most_important_diff
 from pr_review_agent.tools import ReadOnlyTools, ToolResult, normalize_path
@@ -170,6 +170,8 @@ class _Context:
 
     def message(self, number: int, max_steps: int) -> str:
         understanding = self.understanding
+        # What the pull request tells the reviewer to do is left out of the code shown (NFR-5).
+        passages = understanding.addressed_to_reviewer
         parts = [
             "## What the pull request is for (written in an earlier step)",
             data_block(
@@ -182,7 +184,7 @@ class _Context:
         if diff:
             parts += [
                 "## Diff of the most important files",
-                data_block("DIFF", clip(diff, DIFF_CHARS)),
+                data_block("DIFF", clip(leave_out(diff, passages), DIFF_CHARS)),
             ]
         parts += ["## Project map", data_block("PROJECT MAP", clip(self.project_map, MAP_CHARS))]
         if self.steps:
@@ -197,7 +199,7 @@ class _Context:
             last = self.steps[-1]
             parts += [
                 f"## Result of the last step ({last.answer.action} {last.target!r})",
-                data_block("RESULT", clip(last.result.output, RESULT_CHARS)),
+                data_block("RESULT", clip(leave_out(last.result.output, passages), RESULT_CHARS)),
             ]
         parts.append(f"This is step {number} of at most {max_steps}. Choose the next step.")
         return "\n\n".join(parts)

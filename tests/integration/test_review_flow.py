@@ -111,9 +111,9 @@ def test_a_pull_request_with_a_bug_gets_request_changes(monkeypatch: pytest.Monk
     )
     assert "## Finding 1" in verify_call.user
     assert "<<<BEGIN TITLE>>>\nAdd a discount" in understand_call.user
-    # The screen stage reads the pull request's own text and nothing else.
+    # The screen stage reads the pull request's own text and the diff of its changed code.
     assert "<<<BEGIN TITLE>>>\nAdd a discount" in screen_call.user
-    assert "<<<BEGIN DIFF>>>" not in screen_call.user
+    assert "<<<BEGIN DIFF>>>" in screen_call.user
     assert "This is step 1 of at most 10." in explore_call.user
     assert "Goal: Add a members' discount" in find_call.user
     assert "     3 +     avg = price / len(items)" in find_call.user

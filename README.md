@@ -80,14 +80,14 @@ flowchart LR
 | 0. Preflight | Checks Ollama, the model and the GitHub token; one review of a pull request at a time | No |
 | 1. Fetch | Reads the pull request at its latest commit; refuses closed and merged ones | No |
 | 2. Select files | Skips lock, binary and generated files with a reason; fits the rest into the model's context | No |
-| 3. Understand and screen | Writes down the goal, a summary and the risky parts; then, in a call of its own, quotes any sentence of the pull request's text that tells the reviewer what to do, which the finding passes don't read | Yes |
+| 3. Understand and screen | Writes down the goal, a summary and the risky parts; then, in a call of its own, quotes any sentence of the pull request's text, or comment its code adds, that tells the reviewer what to do; the later stages don't read them | Yes |
 | 4. Explore | Downloads the code at that commit and reads related code with read-only tools: search, open a file, list a folder | Yes, step by step |
 | 5. Find problems | Pass A: correctness and regressions (levels 1–3). Pass B: security and performance (levels 4–5) | Yes |
 | 6. Double-check | Puts every finding on a changed line, re-checks it against the code, removes duplicates | Yes |
 | 7. Recommend | Approve, Request Changes or Needs Human Review, by fixed rules, with the rule that decided it | No |
 | 8. Publish | Posts all findings in one plain comment review and the summary, unless it's a dry run | No |
 
-Pull request text and code are always treated as data, never as instructions, and sentences that tell the reviewer what to do or conclude are left out of what the finding passes read and listed in the summary; the tools can only read inside the downloaded code; secrets are masked in everything the agent writes. The full design is in [docs/design.md](docs/design.md).
+Pull request text and code are always treated as data, never as instructions, and sentences or code comments that tell the reviewer what to do or conclude are left out of what the later stages read and listed in the summary; the tools can only read inside the downloaded code; secrets are masked in everything the agent writes. The full design is in [docs/design.md](docs/design.md).
 
 ## Evaluation
 
