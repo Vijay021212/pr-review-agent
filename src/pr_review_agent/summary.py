@@ -103,6 +103,13 @@ def _understanding(result: ReviewResult) -> str:
     ]
     if understanding.risky_parts:
         lines += ["", "**Risky parts:**", *(f"- {part}" for part in understanding.risky_parts)]
+    if understanding.addressed_to_reviewer:
+        lines += [
+            "",
+            "**Left out of the review:** the pull request tells the reviewer what to do or "
+            "conclude here, so these passages weren't used:",
+            *(f"- {passage}" for passage in understanding.addressed_to_reviewer),
+        ]
     if understanding.goal_unclear:
         lines += ["", "**The goal is unclear,** so a person should check the review's direction."]
     return "\n".join(lines)

@@ -10,7 +10,9 @@ it, so bump those prompts' versions too.
 
 Pull request text and code go into the user message inside `data_block()` markers. Every
 prompt tells the model that what's inside them is data to review, never instructions
-(design section 7, NFR-5).
+(design section 7, NFR-5). A small model can follow such text anyway, so the passages of a
+pull request that address the reviewer are also left out of what the finding passes read
+(`leave_out()`).
 """
 
 from __future__ import annotations
@@ -75,3 +77,34 @@ def clip(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return f"{text[:limit]}\n[... {len(text) - limit} more characters left out]"
+
+
+LEFT_OUT = "[A passage addressed to the reviewer was left out here.]"
+
+
+def appears_in(passage: str, text: str) -> bool:
+    """Whether `passage` is in `text` word for word, whatever the spaces between its words."""
+    pattern = _words_of(passage)
+    return pattern is not None and pattern.search(text) is not None
+
+
+def leave_out(text: str, passages: tuple[str, ...]) -> str:
+    """`text` with each passage replaced by a note that it was left out (NFR-5).
+
+    The passages are the sentences of a pull request that tell the reviewer what to do or
+    conclude, as the understand stage quoted them. Each is found word for word, whatever
+    the spaces and line breaks between its words; a quote that isn't in the text changes
+    nothing, so nothing is ever removed on the model's word alone.
+    """
+    for passage in passages:
+        pattern = _words_of(passage)
+        if pattern is not None:
+            text = pattern.sub(lambda _: LEFT_OUT, text)
+    return text
+
+
+def _words_of(passage: str) -> re.Pattern[str] | None:
+    words = passage.split()
+    if not words:
+        return None
+    return re.compile(r"\s+".join(re.escape(word) for word in words))
