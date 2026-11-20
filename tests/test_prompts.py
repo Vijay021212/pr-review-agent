@@ -8,7 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from pr_review_agent.prompts import LEFT_OUT, appears_in, clip, data_block, leave_out, load, parse
+from pr_review_agent.prompts import (
+    LEFT_OUT,
+    appears_in,
+    clip,
+    data_block,
+    leave_out,
+    load,
+    parse,
+    severity_definitions,
+)
 
 CASES = Path(__file__).parent.parent / "eval" / "cases"
 
@@ -125,3 +134,12 @@ def test_a_quote_is_matched_as_plain_text_not_as_a_pattern() -> None:
     text = "Run f(x) * 2 now."
     assert leave_out(text, ("f(x) * 2",)) == f"Run {LEFT_OUT} now."
     assert not appears_in("f(x)+", text)
+
+
+def test_the_severity_definitions_are_read_from_the_prompts_own_part() -> None:
+    # Four levels, each with its meaning and its example, as every prompt includes them.
+    sentences = severity_definitions()
+    assert len(sentences) == 8
+    assert "A major functional failure affecting an important workflow" in sentences
+    assert "an authentication bypass that exposes sensitive records" in sentences
+    assert all(sentence in load("find_a").text for sentence in sentences)

@@ -28,7 +28,7 @@ from pr_review_agent.domain import (
 )
 from pr_review_agent.prompts import LEFT_OUT, load
 from pr_review_agent.stages import ModelCall
-from pr_review_agent.stages.verify import FINDINGS_PER_CALL, build_message, verify
+from pr_review_agent.stages.verify import FINDINGS_PER_CALL, NO_REASON, build_message, verify
 from tests.builders import make_file, make_finding, make_pull_request, make_understanding
 from tests.fakes import FakeChatModel, double_check
 
@@ -317,3 +317,31 @@ def test_a_place_the_tools_refuse_or_already_shown_is_left_out(root: Path, place
     model = FakeChatModel([double_check(True)])
     check(model, root, finding)
     assert "which the finding says it affects" not in model.calls[0].user
+
+
+COPIED = (
+    "Immediate, severe impact, such as data exposure, a major security compromise or "
+    "widespread data loss. Example: an authentication bypass that exposes sensitive records."
+)
+
+
+def test_a_reason_that_only_repeats_a_definition_is_replaced(root: Path) -> None:
+    # The Critical definition on a High finding claimed data exposure for a reordered
+    # parameter (#86); the double-check's own note after it stays.
+    copied = make_finding(file="src/cart.py", line=20, severity_reason=COPIED)
+    model = FakeChatModel([double_check(False)])
+    (finding,) = check(model, root, copied)[0].kept  # disputed, so kept with a note
+    assert finding.severity_reason.startswith(NO_REASON + " (The double-check disputed")
+    assert "authentication bypass" not in finding.severity_reason
+
+
+def test_a_reason_with_words_of_its_own_is_kept_even_with_a_definitions_words(
+    root: Path,
+) -> None:
+    own = (
+        "Every refund for a negative price fails, which is a major functional failure "
+        "affecting an important workflow."
+    )
+    finding = make_finding(file="src/cart.py", line=20, severity_reason=own)
+    (kept,) = check(FakeChatModel([double_check(True)]), root, finding)[0].kept
+    assert kept.severity_reason == own
