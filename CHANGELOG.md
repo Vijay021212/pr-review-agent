@@ -4,6 +4,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-20
+
+The agent is measured: an offline evaluation of 33 test pull requests, every finding read, gives its scores against the targets, per review level and for cases held out from tuning, published in the README; and the review leaves out what a pull request tells the reviewer to do.
+
 ### Added
 
 - The offline evaluation: `pr-review-agent eval eval/cases` reviews every test pull request, stored as folders, with the real agent and without GitHub, and writes a report of every measure per review level (held-out cases separately, average, lowest and highest over repeat runs), a review sheet of every finding, and the raw results ([#21](https://github.com/Vijay021212/pr-review-agent/issues/21)).
@@ -83,6 +87,7 @@ The first review in the terminal: `pr-review-agent review <link> --dry-run` prin
 
 - Reviews saved to a file on Windows are written as UTF-8; time limits under a minute are written in seconds; the "posting isn't available yet" message names `--dry-run` ([#44](https://github.com/Vijay021212/pr-review-agent/issues/44)).
 
-[Unreleased]: https://github.com/Vijay021212/pr-review-agent/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Vijay021212/pr-review-agent/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Vijay021212/pr-review-agent/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Vijay021212/pr-review-agent/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Vijay021212/pr-review-agent/releases/tag/v0.1.0
