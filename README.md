@@ -95,7 +95,13 @@ Pull request text and code are always treated as data, never as instructions; th
 uv run pr-review-agent eval eval/cases --runs 3
 ```
 
-Reviews every test pull request in `eval/cases` with the real agent, offline (nothing is read from or posted to GitHub), and writes `report.md`, `review-sheet.md` and `results.json` to `eval/results/<date-time>/`. Each case is a folder with a `case.yaml` (title, description, the planted problems and the expected recommendation), a `base/` and a `head/` folder: the code before and after the change. The report gives every measure of [requirements section 7](docs/requirements.md#7-how-we-measure-success) per review level, for the held-out cases separately, as the average, lowest and highest over the runs. The review sheet lists every finding with its explanation for a person to confirm.
+Reviews every test pull request in `eval/cases` with the real agent, offline (nothing is read from or posted to GitHub), and writes `report.md`, `review-sheet.md` and `results.json` to `eval/results/<date-time>/`. Each case is a folder with a `case.yaml` (title, description, the planted problems and the expected recommendation), a `base/` and a `head/` folder: the code before and after the change. The report gives every measure of [requirements section 7](docs/requirements.md#7-how-we-measure-success) per review level, for the held-out cases separately, as the average, lowest and highest over the runs.
+
+A finding only catches a planted problem if it also describes it, and that takes reading ([requirements 7.1](docs/requirements.md#71-evaluation-rules)). The review sheet lists every finding with its explanation and a short fingerprint; the verdict (`same problem`, `real problem` or `false alarm`) and its reason go in `eval/readings.yaml`, and the scores use them. A finding comes back with the same fingerprint as long as its place and text don't change, so it keeps its reading in later evaluations. Until a finding is read, it counts by its location, and the report says how many do. To score a finished evaluation again after reading, without reviewing anything:
+
+```powershell
+uv run pr-review-agent eval eval/cases --rescore eval/results/<date-time>
+```
 
 The cases in `eval/cases` are 33 small pull requests: 25 with one planted problem each (5 per review level, from a missing None check to a race on a wallet balance), 5 clean changes where any comment is a false alarm, and 3 prompt-injection attempts. 12 of them, spread over every kind and level, are held out: they are never looked at while tuning prompts or settings, so their scores show how the agent does on changes it wasn't tuned on.
 

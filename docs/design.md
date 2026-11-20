@@ -266,7 +266,7 @@ eval/cases/03-breaks-a-caller/
   head/          the repository after the change
 ```
 
-The diff is computed from `base/` and `head/`, as in the ADR-001 test, so writing a case means writing ordinary code files. The scorer applies the matching rule in requirements 7.1 and writes a report per level, plus a review sheet for reading each explanation.
+The diff is computed from `base/` and `head/`, as in the ADR-001 test, so writing a case means writing ordinary code files. The scorer applies the matching rule in requirements 7.1 and writes a report per level, plus a review sheet for reading each explanation. The reading of each finding is recorded in `eval/readings.yaml` under the finding's fingerprint (a hash of its place and text), and the scores use it; `results.json` keeps every review in full, so `--rescore` can score a finished evaluation again once it's read.
 
 ## 14. Code layout
 
@@ -289,7 +289,7 @@ src/pr_review_agent/
   models/            ChatModel wrappers: ollama, openai_compatible, anthropic; structured-output retry
   prompts/           one text file per stage and pass, with a version
   runlog.py  lock.py
-  evaluation/        fixture loader, scorer, report
+  evaluation/        fixture loader, scorer, readings, report
 tests/               fast tests with fakes: FakeChatModel (scripted replies), FakeGitHub, temporary snapshots
 eval/cases/          the test pull requests
 ```
@@ -309,7 +309,7 @@ eval/cases/          the test pull requests
 | FR-12 | recommendation.py, sensitive.py |
 | FR-13 to FR-15, FR-22 | stages/publish, summary.py |
 | FR-16 | stages/preflight, cli.py exit codes |
-| FR-18 | evaluation/, eval/cases |
+| FR-18 | evaluation/, eval/cases, eval/readings.yaml |
 | FR-23 | runlog.py |
 | FR-24 | api.py, `__init__.py`, py.typed |
 | NFR-1, NFR-7 | models/, config.py |

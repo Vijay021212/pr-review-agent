@@ -2,9 +2,11 @@
 
     pr-review-agent review https://github.com/owner/repo/pull/7 --dry-run
     pr-review-agent eval eval/cases --runs 3
+    pr-review-agent eval eval/cases --rescore eval/results/20261116-150000
 
 `review` only calls `review_pull_request()`, so the command line and Python behave the
-same. `eval` runs the offline evaluation (FR-18).
+same. `eval` runs the offline evaluation (FR-18); with `--rescore` it scores a finished
+evaluation again with the current readings (7.1), without reviewing anything.
 
 Exit codes: 0 complete; 1 the review is incomplete or failed; 2 bad input or a setup
 problem (FR-16).
@@ -25,9 +27,10 @@ from pr_review_agent.api import review_pull_request
 from pr_review_agent.config import Settings
 from pr_review_agent.domain import Deadline, ReviewIncomplete, SetupError
 from pr_review_agent.evaluation.cases import load_cases
-from pr_review_agent.evaluation.report import render_report, render_review_sheet, results_json
+from pr_review_agent.evaluation.readings import READINGS_FILE, load_readings
+from pr_review_agent.evaluation.report import load_results, write_evaluation
 from pr_review_agent.evaluation.runner import run_evaluation
-from pr_review_agent.evaluation.scoring import summarize
+from pr_review_agent.evaluation.scoring import CaseRun
 from pr_review_agent.secrets import Masker, mask
 from pr_review_agent.summary import render_summary
 from pr_review_agent.version import __version__
@@ -71,29 +74,43 @@ def _review(args: argparse.Namespace) -> int:
 
 
 def _evaluate(args: argparse.Namespace) -> int:
+    case_runs: list[CaseRun]
     try:
-        settings = Settings()
         cases = load_cases(Path(args.cases))
-        model = factory.build_model(settings)
-        model.check_ready(Deadline(60))
-        case_runs = run_evaluation(cases, model, settings, runs=args.runs)
+        # Read before reviewing, so a mistake in the file stops the evaluation at once.
+        readings = load_readings(
+            Path(args.readings) if args.readings else Path(args.cases).parent / READINGS_FILE
+        )
+        if args.rescore:
+            if args.runs is not None:
+                raise SetupError(
+                    "--rescore scores a finished evaluation, so --runs doesn't apply.",
+                    "Leave out --runs.",
+                )
+            folder = Path(args.rescore)
+            case_runs, runs, settings_line = load_results(folder, cases)
+            out = Path(args.out) if args.out else folder
+        else:
+            settings = Settings()
+            model = factory.build_model(settings)
+            model.check_ready(Deadline(60))
+            runs = args.runs or 1
+            case_runs = run_evaluation(cases, model, settings, runs=runs)
+            settings_line = (
+                f"context {settings.context_tokens} tokens, up to {settings.explore_max_steps} "
+                f"explore steps, {settings.time_limit_minutes:g}-minute limit"
+            )
+            default = Path("eval", "results", time.strftime("%Y%m%d-%H%M%S"))
+            out = Path(args.out) if args.out else default
     except SetupError as error:
         print(f"Setup problem: {error.problem}\nHow to fix it: {error.fix}", file=sys.stderr)
         return EXIT_SETUP
     except KeyboardInterrupt:
         print("Stopped. The evaluation is incomplete; nothing was written.", file=sys.stderr)
         return EXIT_INCOMPLETE
-    summary = summarize(case_runs, args.runs)
-    settings_line = (
-        f"context {settings.context_tokens} tokens, up to {settings.explore_max_steps} explore "
-        f"steps, {settings.time_limit_minutes:g}-minute limit"
+    report = write_evaluation(
+        out, case_runs, runs=runs, settings_line=settings_line, readings=readings
     )
-    out = Path(args.out) if args.out else Path("eval", "results", time.strftime("%Y%m%d-%H%M%S"))
-    out.mkdir(parents=True, exist_ok=True)
-    report = render_report(summary, case_runs, settings_line=settings_line)
-    (out / "report.md").write_text(report, encoding="utf-8")
-    (out / "review-sheet.md").write_text(render_review_sheet(case_runs), encoding="utf-8")
-    (out / "results.json").write_text(results_json(case_runs), encoding="utf-8")
     print(report)
     print(f"Report, review sheet and results written to {out}", file=sys.stderr)
     return EXIT_COMPLETE
@@ -122,10 +139,23 @@ def _parser() -> argparse.ArgumentParser:
     )
     evaluate.add_argument("cases", help="the folder of evaluation cases, like eval/cases")
     evaluate.add_argument(
-        "--runs", type=_positive, default=1, help="how many times to review each case (default 1)"
+        "--runs", type=_positive, help="how many times to review each case (default 1)"
     )
     evaluate.add_argument(
-        "--out", help="where to write the results (default eval/results/<date-time>)"
+        "--out",
+        help="where to write the results (default eval/results/<date-time>, or with "
+        "--rescore the folder it scores)",
+    )
+    evaluate.add_argument(
+        "--readings",
+        help=f"the file of findings already read (default {READINGS_FILE} next to the cases "
+        "folder, like eval/readings.yaml)",
+    )
+    evaluate.add_argument(
+        "--rescore",
+        metavar="FOLDER",
+        help="score the finished evaluation in FOLDER again with the current readings, "
+        "without reviewing anything",
     )
     return parser
 

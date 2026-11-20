@@ -17,15 +17,20 @@ from pr_review_agent.domain import (
     Deadline,
     FileStatus,
     Finding,
+    FindingStatus,
     RecommendationValue,
     SetupError,
+    Severity,
 )
 from pr_review_agent.evaluation.cases import Case, CaseKind, load_case, load_cases
 from pr_review_agent.evaluation.fixture import FixtureGitHub
+from pr_review_agent.evaluation.readings import Readings, Verdict, fingerprint, load_readings
 from pr_review_agent.evaluation.report import (
+    load_results,
     render_report,
     render_review_sheet,
     results_json,
+    write_evaluation,
 )
 from pr_review_agent.evaluation.runner import run_evaluation
 from pr_review_agent.evaluation.scoring import CaseRun, match_findings, score, summarize
@@ -333,18 +338,27 @@ def test_the_review_sheet_lists_every_finding_for_reading(tmp_path: Path) -> Non
     assert "## c, run 1" in sheet
     assert "- Planted: `src/stats.py:4`, level 2, bug: Divides by zero for an empty list." in sheet
     assert "- Planted: `src/stats.py:2-4`" in sheet
-    assert "matches the planted problem at line 4" in sheet
-    assert "matches no planted problem" in sheet
+    # Findings are listed by file and line, so src/other.py comes first.
+    assert f"### Finding 2, `{fingerprint(finding(4))}`: `src/stats.py` line 4" in sheet
+    assert "near the planted problem at line 4" in sheet
+    assert "near no planted problem" in sheet
     assert "- Recommendation: incomplete (timed out); expected Request Changes" in sheet
     assert "- Planted: nothing (clean case)" in sheet
-    assert sheet.count("Verdict: ______") == 2
+    assert sheet.count("Not read yet. To record it:") == 2
+    block = f"    - case: c\n      finding: {fingerprint(finding(4))}\n      at: src/stats.py:4\n"
+    assert block in sheet
 
 
-def test_the_results_hold_every_review(tmp_path: Path) -> None:
-    data = json.loads(results_json([case_run(tmp_path, finding(4))]))
-    assert data[0]["case"] == "c"
-    assert data[0]["findings"][0]["matched_line"] == 4
-    assert data[0]["recommendation"] == "Request Changes"
+def test_the_results_hold_every_review_in_full(tmp_path: Path) -> None:
+    run = case_run(tmp_path, finding(4))
+    data = json.loads(results_json([run], runs=1, settings_line="context 16384 tokens"))
+    assert (data["format"], data["runs"], data["settings"]) == (2, 1, "context 16384 tokens")
+    (review,) = data["reviews"]
+    assert (review["case"], review["recommendation"]) == ("c", "Request Changes")
+    (found,) = review["findings"]
+    assert found["finding"] == fingerprint(finding(4))
+    assert (found["near_line"], found["verdict"], found["read"]) == (4, "same problem", False)
+    assert review["result"]["findings"]["kept"][0]["explanation"] == finding(4).explanation
 
 
 # --- Running it ------------------------------------------------------------------------
@@ -411,7 +425,8 @@ def test_the_eval_command_writes_the_report_sheet_and_results(
     assert cli.main(["eval", str(tmp_path / "cases"), "--out", str(out)]) == 0
     assert (out / "report.md").read_text(encoding="utf-8").startswith("# Evaluation report")
     assert (out / "review-sheet.md").exists()
-    assert json.loads((out / "results.json").read_text(encoding="utf-8"))[0]["case"] == "c"
+    results = json.loads((out / "results.json").read_text(encoding="utf-8"))
+    assert results["reviews"][0]["case"] == "c"
     captured = capsys.readouterr()
     assert "| Catch rate | 60% or more | 100%" in captured.out
     assert f"written to {out}" in captured.err
@@ -476,8 +491,232 @@ def test_the_eval_command_runs_every_case_as_often_as_asked(
     monkeypatch.setattr("pr_review_agent.factory.build_model", lambda s: FakeChatModel(replies))
     out = tmp_path / "out"
     assert cli.main(["eval", str(tmp_path / "cases"), "--runs", "2", "--out", str(out)]) == 0
-    runs = json.loads((out / "results.json").read_text(encoding="utf-8"))
-    assert [run["run"] for run in runs] == [1, 2]
+    results = json.loads((out / "results.json").read_text(encoding="utf-8"))
+    assert [review["run"] for review in results["reviews"]] == [1, 2]
+    assert results["runs"] == 2
+
+
+# --- Readings (#64) ---------------------------------------------------------------------
+#
+# A catch must also describe the planted problem, which a person reads and records (7.1).
+
+
+def write_readings(path: Path, *entries: dict[str, Any]) -> Path:
+    path.write_text(yaml.safe_dump(list(entries)), encoding="utf-8")
+    return path
+
+
+def reading_of(found: Finding, verdict: str, case: str = "c") -> dict[str, Any]:
+    return {
+        "case": case,
+        "finding": fingerprint(found),
+        "at": f"{found.file}:{found.line}",
+        "verdict": verdict,
+        "reason": "Read.",
+    }
+
+
+def readings_for(tmp_path: Path, *entries: dict[str, Any]) -> Readings:
+    return load_readings(write_readings(tmp_path / "readings.yaml", *entries))
+
+
+def test_a_fingerprint_changes_with_the_findings_place_and_claim_only() -> None:
+    first = finding(4)
+    assert fingerprint(first) == fingerprint(finding(4))
+    assert len(fingerprint(first)) == 12
+    # The double-check may change these without changing what the finding claims.
+    relabelled = finding(4, severity=Severity.LOW, status=FindingStatus.POTENTIAL_RISK)
+    assert fingerprint(relabelled) == fingerprint(first)
+    for changed in (
+        finding(5),
+        finding(4, file="src/other.py"),
+        finding(4, explanation="Something else entirely."),
+        finding(4, expected_behaviour="A clear error."),
+    ):
+        assert fingerprint(changed) != fingerprint(first)
+
+
+def test_without_a_readings_file_nothing_is_read_yet(tmp_path: Path) -> None:
+    assert len(load_readings(tmp_path / "readings.yaml")) == 0
+
+
+def test_a_reading_is_found_by_its_case_and_finding(tmp_path: Path) -> None:
+    readings = readings_for(tmp_path, reading_of(finding(4), "false alarm"))
+    reading = readings.of("c", finding(4))
+    assert reading is not None
+    assert reading.verdict is Verdict.FALSE_ALARM
+    assert readings.of("other", finding(4)) is None
+    assert readings.of("c", finding(5)) is None
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "- case: c\n  finding: abc\n  verdict: false alarm\n  reason: x\n",  # not a fingerprint
+        "- case: c\n  finding: 0123456789ab\n  verdict: maybe\n  reason: x\n",  # no such verdict
+        "- case: c\n  finding: 0123456789ab\n  verdict: false alarm\n",  # no reason
+        "case: c\n",  # not a list
+        "- [unclosed\n",  # not YAML
+    ],
+)
+def test_a_wrong_readings_file_says_what_to_correct(tmp_path: Path, content: str) -> None:
+    path = tmp_path / "readings.yaml"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(SetupError, match="readings file") as caught:
+        load_readings(path)
+    assert caught.value.fix.startswith(f"Correct {path}")
+
+
+def test_a_finding_read_twice_is_refused(tmp_path: Path) -> None:
+    entry = reading_of(finding(4), "same problem")
+    with pytest.raises(SetupError, match="twice"):
+        readings_for(tmp_path, entry, {**entry, "verdict": "false alarm"})
+
+
+def test_a_finding_near_the_problem_but_about_something_else_is_no_catch(tmp_path: Path) -> None:
+    near = finding(4)
+    readings = readings_for(tmp_path, reading_of(near, "false alarm"))
+    scores = score([case_run(tmp_path, near)], readings)
+    assert (scores.catch_rate, scores.precision, scores.false_alarms_per_pr) == (0.0, 0.0, 1.0)
+    assert scores.line_accuracy is None  # only catches count for line accuracy
+    assert scores.unread == 0
+
+
+def test_a_real_problem_away_from_the_planted_lines_isnt_a_false_alarm(tmp_path: Path) -> None:
+    elsewhere = finding(1, file="src/other.py")
+    readings = readings_for(tmp_path, reading_of(elsewhere, "real problem"))
+    scores = score([case_run(tmp_path, elsewhere)], readings)
+    assert (scores.catch_rate, scores.precision, scores.false_alarms_per_pr) == (0.0, 1.0, 0.0)
+
+
+def test_the_same_problem_further_than_3_lines_away_is_right_but_no_catch(
+    tmp_path: Path,
+) -> None:
+    far = finding(8)
+    readings = readings_for(tmp_path, reading_of(far, "same problem"))
+    scores = score([case_run(tmp_path, far)], readings)
+    assert (scores.catch_rate, scores.precision) == (0.0, 1.0)
+
+
+def test_unread_findings_count_by_their_location_and_are_counted(tmp_path: Path) -> None:
+    read, unread = finding(4), finding(1, file="src/other.py")
+    readings = readings_for(tmp_path, reading_of(read, "same problem"))
+    scores = score([case_run(tmp_path, read, unread)], readings)
+    assert (scores.catch_rate, scores.precision, scores.unread) == (1.0, 0.5, 1)
+
+
+def test_the_report_and_the_sheet_show_the_readings(tmp_path: Path) -> None:
+    near, elsewhere = finding(4), finding(1, file="src/other.py")
+    readings = readings_for(tmp_path, reading_of(near, "false alarm"))
+    runs = [case_run(tmp_path, near, elsewhere)]
+    summary = summarize(runs, 1, readings)
+    report = render_report(summary, runs, settings_line="x", readings=readings)
+    assert "| Findings not read yet | 0 | 1 | 1 | 1 |" in report
+    assert "| c | planted | no | Request Changes | Request Changes | 0/1 | 1.0 |" in report
+    sheet = render_review_sheet(runs, readings)
+    assert "Reading: **false alarm**. Read." in sheet
+    assert sheet.count("Not read yet. To record it:") == 1
+
+
+def test_the_results_load_back_as_they_were(tmp_path: Path) -> None:
+    cases = tmp_path / "cases"
+    done = case_run(cases, finding(4), seconds=90)
+    stopped = CaseRun(load_case(write_case(cases, "d")), 1, None, "timed out", 9)
+    write_evaluation(tmp_path / "out", [done, stopped], runs=1, settings_line="s")
+    loaded, runs, settings_line = load_results(tmp_path / "out", load_cases(cases))
+    assert (runs, settings_line) == (1, "s")
+    assert loaded[0].result == done.result
+    assert (loaded[0].case.name, loaded[0].run, loaded[0].seconds) == ("c", 1, 90.0)
+    assert (loaded[1].result, loaded[1].incomplete) == (None, "timed out")
+
+
+def test_scoring_again_refuses_a_case_changed_since(tmp_path: Path) -> None:
+    cases = tmp_path / "cases"
+    write_evaluation(tmp_path / "out", [case_run(cases, finding(4))], runs=1, settings_line="s")
+    code = cases / "c" / "head" / "src" / "stats.py"
+    code.write_text(code.read_text(encoding="utf-8") + "# A later edit.\n", encoding="utf-8")
+    with pytest.raises(SetupError, match="changed after this evaluation ran"):
+        load_results(tmp_path / "out", load_cases(cases))
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        (None, "There's no results.json"),
+        ("not json", "isn't valid JSON"),
+        ('[{"case": "c"}]', "earlier version"),  # format 1 was a list of locations
+        ('{"format": 2, "reviews": [{"case": "gone"}]}', "isn't in the cases folder"),
+        ('{"format": 2, "reviews": [{"case": "c"}]}', "is damaged"),
+    ],
+)
+def test_scoring_again_needs_the_full_results_of_these_cases(
+    tmp_path: Path, content: str | None, message: str
+) -> None:
+    write_case(tmp_path / "cases", "c")
+    out = tmp_path / "out"
+    out.mkdir()
+    if content is not None:
+        (out / "results.json").write_text(content, encoding="utf-8")
+    with pytest.raises(SetupError, match=message):
+        load_results(out, load_cases(tmp_path / "cases"))
+
+
+def _no_model(settings: Settings) -> None:
+    raise AssertionError("scoring again, or failing early, must not build a model")
+
+
+def test_the_eval_command_scores_a_finished_evaluation_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cases = tmp_path / "eval" / "cases"
+    results = tmp_path / "results"
+    write_evaluation(results, [case_run(cases, finding(4))], runs=1, settings_line="16k tokens")
+    assert "| Catch rate | 60% or more | 100%" in (results / "report.md").read_text("utf-8")
+    write_readings(tmp_path / "eval" / "readings.yaml", reading_of(finding(4), "false alarm"))
+    monkeypatch.setattr("pr_review_agent.factory.build_model", _no_model)
+    assert cli.main(["eval", str(cases), "--rescore", str(results)]) == 0
+    report = (results / "report.md").read_text(encoding="utf-8")
+    assert "| Catch rate | 60% or more | 0% |" in report
+    assert "16k tokens" in report
+    assert "Reading: **false alarm**" in (results / "review-sheet.md").read_text("utf-8")
+    assert f"written to {results}" in capsys.readouterr().err
+
+
+def test_the_readings_file_and_the_output_folder_can_be_named(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cases = tmp_path / "cases"
+    write_evaluation(tmp_path / "out", [case_run(cases, finding(4))], runs=1, settings_line="s")
+    mine = write_readings(tmp_path / "mine.yaml", reading_of(finding(4), "false alarm"))
+    monkeypatch.setattr("pr_review_agent.factory.build_model", _no_model)
+    args = ["eval", str(cases), "--rescore", str(tmp_path / "out"), "--readings", str(mine)]
+    assert cli.main([*args, "--out", str(tmp_path / "read")]) == 0
+    assert "| Catch rate | 60% or more | 0% |" in (tmp_path / "read" / "report.md").read_text(
+        "utf-8"
+    )
+    # The evaluation scored again elsewhere keeps its own files.
+    assert "| Catch rate | 60% or more | 100%" in (tmp_path / "out" / "report.md").read_text(
+        "utf-8"
+    )
+
+
+def test_scoring_again_takes_no_number_of_runs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_case(tmp_path / "cases", "c")
+    args = ["eval", str(tmp_path / "cases"), "--rescore", str(tmp_path), "--runs", "2"]
+    assert cli.main(args) == 2
+    assert "--runs doesn't apply" in capsys.readouterr().err
+
+
+def test_a_wrong_readings_file_stops_the_evaluation_before_any_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_case(tmp_path / "cases", "c")
+    (tmp_path / "readings.yaml").write_text("- [unclosed\n", encoding="utf-8")
+    monkeypatch.setattr("pr_review_agent.factory.build_model", _no_model)
+    assert cli.main(["eval", str(tmp_path / "cases")]) == 2
+    assert "readings file" in capsys.readouterr().err
 
 
 # --- The evaluation cases in eval/cases (#22) ----------------------------------------------
