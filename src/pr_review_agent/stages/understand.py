@@ -39,6 +39,9 @@ def understand(
         model, load("understand"), build_message(pull_request, scope), UnderstandingAnswer, deadline
     )
     understanding = Understanding.model_validate(answer.model_dump())
+    changed = {file.path for file in pull_request.files}
+    risky = _named_risks(understanding.risky_parts, changed)
+    understanding = understanding.model_copy(update={"risky_parts": risky})
     if not _has_stated_goal(pull_request):
         # Nothing was written down, so the goal can only have come from the code (FR-2),
         # whatever the model says.
@@ -61,3 +64,20 @@ def build_message(pull_request: PullRequest, scope: ReviewScope) -> str:
 
 def _has_stated_goal(pull_request: PullRequest) -> bool:
     return bool(pull_request.description.strip() or pull_request.linked_issues)
+
+
+def _named_risks(parts: tuple[str, ...], changed: set[str]) -> tuple[str, ...]:
+    """The risky parts, each naming its file. The model sometimes writes a changed file and
+    what could break in it as two items, so the summary listed the file's bare name as a
+    risk of its own (#109): such a name is joined to the item after it, and dropped when
+    nothing follows it."""
+    joined: list[str] = []
+    named: str | None = None  # a bare file name waiting for its risk
+    for part in parts:
+        bare = part.strip().strip("`").strip().removesuffix(":").strip("`").strip()
+        if bare in changed:
+            named = bare
+            continue
+        joined.append(f"`{named}`: {part}" if named else part)
+        named = None
+    return tuple(joined)

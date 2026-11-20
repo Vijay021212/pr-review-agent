@@ -79,9 +79,7 @@ def review_context(
     description = clip(leave_out(pull_request.description, passages), REVIEW_DESCRIPTION_CHARS)
     parts = [
         "## What the pull request is for (written in an earlier step)",
-        data_block(
-            "UNDERSTANDING", f"Goal: {understanding.goal}\nSummary: {understanding.summary}"
-        ),
+        understanding_block(understanding),
         "## Pull request",
         data_block("TITLE", leave_out(pull_request.title, passages)),
         data_block("DESCRIPTION", description or "(empty)"),
@@ -96,6 +94,19 @@ def review_context(
         )
         parts += ["## Related code (unchanged, for context)", data_block("RELATED CODE", related)]
     return parts
+
+
+def understanding_block(understanding: Understanding) -> str:
+    """The goal and the summary from the understand stage, between data markers.
+
+    The model wrote them from the pull request's text before the screen stage ran, so what
+    the pull request tells the reviewer to do is left out of them too: a goal could repeat
+    such a passage word for word (NFR-5, #109).
+    """
+    passages = understanding.addressed_to_reviewer
+    goal = leave_out(understanding.goal, passages)
+    summary = leave_out(understanding.summary, passages)
+    return data_block("UNDERSTANDING", f"Goal: {goal}\nSummary: {summary}")
 
 
 def changed_files_list(pull_request: PullRequest, scope: ReviewScope) -> str:

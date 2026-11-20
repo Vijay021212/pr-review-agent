@@ -8,19 +8,20 @@ and every comment the change adds, that speaks to the reviewer about the review 
 
 Nothing is left out on the model's word alone:
 
-- a sentence of the pull request's text counts only if it's there word for word;
+- a sentence of the pull request's text counts only if it's there word for word, within one
+  part: the title, the description or one linked issue, which is what the later stages
+  leave it out of (#109);
 - in the code, only a comment line counts, when its text is inside one of the quotes; a line
   of code is never left out, whatever the model quotes (#82). A comment over several lines
   comes back from the model as one sentence, so the comment lines are matched one by one.
 
-The later stages read the text and the code without them (`prompts.leave_out()`), and the
-summary lists them. It's a call of its own, not part of the understand call, so looking for
-such sentences never changes how the pull request is understood (#80).
+The later stages read the text and the code without them (`prompts.leave_out()` and
+`prompts.leave_out_comments()`), and the summary lists them. It's a call of its own, not
+part of the understand call, so looking for such sentences never changes how the pull
+request is understood (#80).
 """
 
 from __future__ import annotations
-
-import re
 
 from pydantic import BaseModel, ConfigDict
 
@@ -32,12 +33,10 @@ from pr_review_agent.domain import (
     PullRequest,
     ReviewScope,
 )
-from pr_review_agent.prompts import appears_in, data_block, load
+from pr_review_agent.prompts import COMMENT_LINE, appears_in, data_block, load
 from pr_review_agent.stages import ModelCall, ask, most_important_diff, pull_request_text
 
 MIN_COMMENT_WORDS = 3  # a shorter comment ("# ok") could be inside a quote by chance
-# A line that is only a comment, in the common languages: `#`, `//`, `/* ... */`, `*`, `--`.
-_COMMENT = re.compile(r"^\s*(?:#+|//+|/\*+|\*+|--+)\s*(?P<text>.*?)\s*(?:\*+/)?\s*$")
 
 
 class ScreenAnswer(BaseModel):
@@ -57,14 +56,12 @@ def screen(
     message = build_message(pull_request, scope)
     answer, call = ask(model, load("screen"), message, ScreenAnswer, deadline)
     quotes = answer.addressed_to_reviewer
-    text = "\n".join(
-        [
-            pull_request.title,
-            pull_request.description,
-            *(f"{issue.title}\n{issue.body}" for issue in pull_request.linked_issues),
-        ]
-    )
-    sentences = [quote for quote in quotes if appears_in(quote, text)]
+    parts = [
+        pull_request.title,
+        pull_request.description,
+        *(f"{issue.title}\n{issue.body}" for issue in pull_request.linked_issues),
+    ]
+    sentences = [quote for quote in quotes if any(appears_in(quote, part) for part in parts)]
     comments = _comments_left_out(pull_request, quotes)
     return tuple(dict.fromkeys([*sentences, *comments])), call
 
@@ -86,7 +83,7 @@ def _comments_left_out(pull_request: PullRequest, quotes: tuple[str, ...]) -> li
         for line in file.lines:
             if line.kind is not LineKind.ADDED:
                 continue
-            comment = _COMMENT.match(line.text)
+            comment = COMMENT_LINE.match(line.text)
             if comment is None:
                 continue  # a line of code: never left out
             words = comment["text"]

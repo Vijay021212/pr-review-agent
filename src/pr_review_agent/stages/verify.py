@@ -42,7 +42,7 @@ from pr_review_agent.domain import (
     Side,
     Understanding,
 )
-from pr_review_agent.prompts import data_block, leave_out, load, severity_definitions
+from pr_review_agent.prompts import data_block, leave_out_comments, load, severity_definitions
 from pr_review_agent.stages import ModelCall, ask, review_context
 from pr_review_agent.tools import ReadOnlyTools, ToolRefused, normalize_path
 
@@ -149,7 +149,7 @@ def build_message(
             ]
         )
         parts += [f"## Finding {number}", data_block(f"FINDING {number}", text)]
-        code = leave_out(_code_around(root, finding), passages)
+        code = leave_out_comments(_code_around(root, finding), passages)
         if code:
             parts += [
                 f"Code around line {finding.line} at the reviewed commit:",
@@ -159,12 +159,14 @@ def build_message(
         if file is not None:
             parts += [
                 "The change near it:",
-                data_block(f"DIFF {number}", leave_out(_diff_around(file, finding), passages)),
+                data_block(
+                    f"DIFF {number}", leave_out_comments(_diff_around(file, finding), passages)
+                ),
             ]
         for place, code in _places(root, finding):
             parts += [
                 f"Code at {place}, which the finding says it affects:",
-                data_block(f"PLACE {number}", leave_out(code, passages)),
+                data_block(f"PLACE {number}", leave_out_comments(code, passages)),
             ]
     parts.append(f"Give a decision for each of the {len(group)} findings above.")
     return "\n\n".join(parts)
@@ -268,13 +270,16 @@ def _own_reason(finding: Finding) -> Finding:
     Every finding gives the reason for its severity (requirements 5.2), but the model
     sometimes answers with a definition copied from the prompt, often the Critical one on a
     High finding, so the comment would claim harm that has nothing to do with the change
-    (#86). With the definitions and examples taken out, a reason needs a few words of its
-    own; if it hasn't, it's replaced by a plain note. A note the double-check added stays.
+    (#86). A reason that repeats a definition or an example needs a few words of its own
+    besides; if it hasn't, it's replaced by a plain note. A short reason that repeats none,
+    like "SQL injection vulnerability", is the model's own and stays (#109). A note the
+    double-check added stays too.
     """
     reason, note, rest = finding.severity_reason.partition(NOTE_START)
     remaining = reason
     for sentence in severity_definitions():
         remaining = re.sub(re.escape(sentence), " ", remaining, flags=re.IGNORECASE)
-    if len(re.findall(r"[A-Za-z0-9_']+", remaining)) >= OWN_WORDS:
+    repeats_a_definition = remaining != reason
+    if not repeats_a_definition or len(re.findall(r"[A-Za-z0-9_']+", remaining)) >= OWN_WORDS:
         return finding
     return finding.model_copy(update={"severity_reason": NO_REASON + note + rest})

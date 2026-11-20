@@ -335,6 +335,14 @@ def test_a_reason_that_only_repeats_a_definition_is_replaced(root: Path) -> None
     assert "authentication bypass" not in finding.severity_reason
 
 
+@pytest.mark.parametrize("own", ["SQL injection vulnerability", "Data loss."])
+def test_a_short_reason_that_repeats_no_definition_is_the_models_own(root: Path, own: str) -> None:
+    # Replacing it said the model repeated the definitions, which it hadn't (#109).
+    finding = make_finding(file="src/cart.py", line=20, severity_reason=own)
+    (kept,) = check(FakeChatModel([double_check(True)]), root, finding)[0].kept
+    assert kept.severity_reason == own
+
+
 def test_a_reason_with_words_of_its_own_is_kept_even_with_a_definitions_words(
     root: Path,
 ) -> None:
