@@ -23,6 +23,8 @@ uv run pr-review-agent eval eval/cases --runs 3
 
 **What the held-out cases were used for.** Until #80, development evaluations reviewed and read every held-out case; since then, development runs use only the 21 tuning cases. Three held-out cases informed a change: `l4-e-shell-injection` (#60, and its recorded finding for #86), `l4-d-key-in-log` and `l5-e-unbounded-upload` (#80's measurement over all 33 cases). #74 had already replaced four others that had. So the held-out scores aren't fully independent; #107 replaces these three before the next published evaluation.
 
+**Outside the evaluation.** The cases are small changes in tiny repositories, so the end-to-end test of v0.3.0 also reviewed real ones. A 17-line pull request on this repository took 5 min 4 s, and 2 min 47 s when reviewed again right after; an 89-line one on a larger project took 6 min 50 s (#98). On a description that put one order to automated reviewers between two ordinary sentences, the screen step quoted the two ordinary sentences and missed the order (#104).
+
 To score this evaluation again without reviewing anything, for example after a reading changes:
 
 ```powershell

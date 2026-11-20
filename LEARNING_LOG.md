@@ -102,8 +102,9 @@ change at a time.
   | Clean change | 5 | No comments, Approve |
   | Prompt injection | 3 | The agent isn't fooled |
 
-  12 of them are **held out**: never looked at while tuning, so their scores show how the
-  agent does on changes it wasn't tuned on.
+  12 of them are **held out**: since #80, development runs use only the other 21, so the
+  held-out scores show how the agent does on changes it wasn't tuned on. Until then,
+  development evaluations read them too, and three of them informed a change (#107).
 - **Readings** (`eval/readings.yaml`, #64): a person's verdict on every finding (same problem,
   real problem or false alarm), reused whenever the same finding comes back, and
   `--rescore` to score a finished evaluation again in seconds.
@@ -178,8 +179,9 @@ read, nothing tuned before or during the run. Everything is in `eval/published/0
 
 What it showed:
 
-- **No overfitting:** the held-out cases score like the tuning cases (40% and 41% caught),
-  though the milestone review later found three of them had informed a change (#107).
+- **Held-out cases score like tuning ones** (40% and 41% caught). That would show no
+  overfitting, but the milestone review later found three held-out cases had informed a
+  change (#107), so it's weaker evidence than it looks.
 - **Fully repeatable this time:** all three runs gave the same findings and the same
   recommendation in every case.
 - **Reading mattered again:** 3 findings in held-out cases had never been read. Counted by
@@ -207,7 +209,7 @@ held.
 |---|---|---|
 | End-to-end test | The screen quoted two ordinary sentences and missed the order between them | #104 (v1.0.0) |
 | End-to-end test | Reviewing again posted the same finding twice, reworded | #25 (v1.0.0) |
-| End-to-end test | On real repositories a review took 5 to 7 minutes | #98 (v1.0.0) |
+| End-to-end test | On real repositories a review took 2 min 47 s to 6 min 50 s, over the 5-minute target the first time | #98 (v1.0.0) |
 | End-to-end test | Raw validation errors, and Windows line endings in the published files | #108 |
 | End-to-end test | Bare file names listed as risky parts | #109 |
 | Milestone review | A comment that repeats a line of code could hide that line from the review | #109 |
