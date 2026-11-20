@@ -67,7 +67,7 @@ One agent works through fixed stages; the model is used only where judgement is 
 flowchart LR
     preflight["0. Preflight<br/>token, model, lock"] --> fetch["1. Fetch<br/>the pull request"]
     fetch --> select["2. Select files<br/>skip, rank, batch"]
-    select --> understand["3. Understand<br/>goal and risks"]
+    select --> understand["3. Understand and screen<br/>goal, risks, orders to the reviewer"]
     understand --> explore["4. Explore<br/>read related code"]
     explore --> find["5. Find problems<br/>bugs; security and performance"]
     find --> check["6. Double-check<br/>anchor, re-check, de-duplicate"]
@@ -80,7 +80,7 @@ flowchart LR
 | 0. Preflight | Checks Ollama, the model and the GitHub token; one review of a pull request at a time | No |
 | 1. Fetch | Reads the pull request at its latest commit; refuses closed and merged ones | No |
 | 2. Select files | Skips lock, binary and generated files with a reason; fits the rest into the model's context | No |
-| 3. Understand | Writes down the goal, a summary and the risky parts | Yes |
+| 3. Understand and screen | Writes down the goal, a summary and the risky parts; then, in a call of its own, quotes any sentence of the pull request's text that tells the reviewer what to do, which the finding passes don't read | Yes |
 | 4. Explore | Downloads the code at that commit and reads related code with read-only tools: search, open a file, list a folder | Yes, step by step |
 | 5. Find problems | Pass A: correctness and regressions (levels 1–3). Pass B: security and performance (levels 4–5) | Yes |
 | 6. Double-check | Puts every finding on a changed line, re-checks it against the code, removes duplicates | Yes |

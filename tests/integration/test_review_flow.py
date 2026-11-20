@@ -20,7 +20,14 @@ from pr_review_agent.factory import Components
 from pr_review_agent.prompts import load
 from pr_review_agent.secrets import Masker
 from tests.builders import make_file, make_pull_request
-from tests.fakes import EXPLORE_DONE, KEEP_ONE, FakeChatModel, FakeGitHub, explore_step
+from tests.fakes import (
+    EXPLORE_DONE,
+    KEEP_ONE,
+    NOTHING_TO_SCREEN,
+    FakeChatModel,
+    FakeGitHub,
+    explore_step,
+)
 
 LINK = "https://github.com/octo/shop/pull/7"
 
@@ -32,7 +39,6 @@ def understanding(**changes: Any) -> str:
             "summary": "Adds discount() in src/cart.py and uses it in total().",
             "risky_parts": ["src/cart.py: every member total changes"],
             "goal_unclear": False,
-            "addressed_to_reviewer": [],
             "goal_source": "description",
             **changes,
         }
@@ -89,7 +95,9 @@ class World:
 
 
 def test_a_pull_request_with_a_bug_gets_request_changes(monkeypatch: pytest.MonkeyPatch) -> None:
-    world = World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found(), KEEP_ONE)
+    world = World(
+        monkeypatch, understanding(), NOTHING_TO_SCREEN, EXPLORE_DONE, found(BUG), found(), KEEP_ONE
+    )
     result = review_pull_request(LINK, dry_run=True)
 
     assert result.understanding.goal.startswith("Add a members' discount")
@@ -98,9 +106,14 @@ def test_a_pull_request_with_a_bug_gets_request_changes(monkeypatch: pytest.Monk
     assert result.recommendation.value is RecommendationValue.REQUEST_CHANGES
     assert result.recommendation.reasons == ("1 High finding (`src/cart.py` line 3)",)
     # Each stage asked the model once, in order, and saw what it needed.
-    understand_call, explore_call, find_call, find_b_call, verify_call = world.model.calls
+    understand_call, screen_call, explore_call, find_call, find_b_call, verify_call = (
+        world.model.calls
+    )
     assert "## Finding 1" in verify_call.user
     assert "<<<BEGIN TITLE>>>\nAdd a discount" in understand_call.user
+    # The screen stage reads the pull request's own text and nothing else.
+    assert "<<<BEGIN TITLE>>>\nAdd a discount" in screen_call.user
+    assert "<<<BEGIN DIFF>>>" not in screen_call.user
     assert "This is step 1 of at most 10." in explore_call.user
     assert "Goal: Add a members' discount" in find_call.user
     assert "     3 +     avg = price / len(items)" in find_call.user
@@ -110,7 +123,7 @@ def test_a_pull_request_with_a_bug_gets_request_changes(monkeypatch: pytest.Monk
 
 
 def test_a_clean_pull_request_is_approved(monkeypatch: pytest.MonkeyPatch) -> None:
-    World(monkeypatch, understanding(), EXPLORE_DONE, found(), found())
+    World(monkeypatch, understanding(), NOTHING_TO_SCREEN, EXPLORE_DONE, found(), found())
     result = review_pull_request(LINK, dry_run=True)
     assert result.recommendation.value is RecommendationValue.APPROVE
     assert result.findings.kept == ()
@@ -119,7 +132,9 @@ def test_a_clean_pull_request_is_approved(monkeypatch: pytest.MonkeyPatch) -> No
 def test_a_lock_file_is_skipped_and_a_huge_file_is_a_gap(monkeypatch: pytest.MonkeyPatch) -> None:
     huge = make_file("src/generated_tables.py", [f"ROW_{n} = {n}" for n in range(4000)])
     files = (CART, make_file("uv.lock"), huge)
-    World(monkeypatch, understanding(), EXPLORE_DONE, found(), found(), files=files)
+    World(
+        monkeypatch, understanding(), NOTHING_TO_SCREEN, EXPLORE_DONE, found(), found(), files=files
+    )
     result = review_pull_request(LINK, dry_run=True)
     assert [(s.path, s.reason) for s in result.scope.skipped] == [
         ("uv.lock", "lock file"),
@@ -133,6 +148,7 @@ def test_an_unclear_goal_needs_a_person(monkeypatch: pytest.MonkeyPatch) -> None
     World(
         monkeypatch,
         understanding(goal_unclear=True),
+        NOTHING_TO_SCREEN,
         EXPLORE_DONE,
         found(),
         found(),
@@ -144,7 +160,14 @@ def test_an_unclear_goal_needs_a_person(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_a_model_that_fails_makes_the_review_incomplete(monkeypatch: pytest.MonkeyPatch) -> None:
-    World(monkeypatch, understanding(), EXPLORE_DONE, "I can't answer in JSON.", "Still no JSON.")
+    World(
+        monkeypatch,
+        understanding(),
+        NOTHING_TO_SCREEN,
+        EXPLORE_DONE,
+        "I can't answer in JSON.",
+        "Still no JSON.",
+    )
     with pytest.raises(ReviewIncomplete, match="didn't match the required format"):
         review_pull_request(LINK, dry_run=True)
 
@@ -152,7 +175,9 @@ def test_a_model_that_fails_makes_the_review_incomplete(monkeypatch: pytest.Monk
 def test_the_command_line_prints_the_whole_review(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found(), KEEP_ONE)
+    World(
+        monkeypatch, understanding(), NOTHING_TO_SCREEN, EXPLORE_DONE, found(BUG), found(), KEEP_ONE
+    )
     assert cli.main(["review", LINK, "--dry-run"]) == 0
     captured = capsys.readouterr()
     out = captured.out
@@ -162,7 +187,9 @@ def test_the_command_line_prints_the_whole_review(
     assert "#### `src/cart.py` line 3" in out
     assert "- **What happens now:** ZeroDivisionError, and the checkout page fails." in out
     assert "- **Reviewed (1 file):** `src/cart.py`" in out
-    labels = ", ".join(load(name).label for name in ("understand", "explore", "find_a", "find_b"))
+    labels = ", ".join(
+        load(name).label for name in ("understand", "screen", "explore", "find_a", "find_b")
+    )
     assert f"prompts: {labels}" in out
     # Progress went to the error stream, so the review itself can be saved cleanly.
     assert "Reading pull request octo/shop#7..." in captured.err
@@ -171,7 +198,7 @@ def test_the_command_line_prints_the_whole_review(
 def test_the_command_line_reports_an_incomplete_review(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    World(monkeypatch, understanding(), EXPLORE_DONE, "no", "no")
+    World(monkeypatch, understanding(), NOTHING_TO_SCREEN, EXPLORE_DONE, "no", "no")
     assert cli.main(["review", LINK, "--dry-run"]) == 1
     captured = capsys.readouterr()
     assert "The review is incomplete" in captured.err
@@ -202,7 +229,14 @@ def test_exploring_finds_the_caller_and_the_finding_names_it(
         explore_step("done", reason="The caller is understood."),
     ]
     world = World(
-        monkeypatch, understanding(), *steps, found(BUG), found(), KEEP_ONE, repository=repository
+        monkeypatch,
+        understanding(),
+        NOTHING_TO_SCREEN,
+        *steps,
+        found(BUG),
+        found(),
+        KEEP_ONE,
+        repository=repository,
     )
     assert cli.main(["review", LINK, "--dry-run"]) == 0
     out = capsys.readouterr().out
@@ -234,7 +268,9 @@ def test_a_review_is_posted_when_not_a_dry_run(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("PRRA_GITHUB_TOKEN", "ghp_" + "t" * 36)
-    world = World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found(), KEEP_ONE)
+    world = World(
+        monkeypatch, understanding(), NOTHING_TO_SCREEN, EXPLORE_DONE, found(BUG), found(), KEEP_ONE
+    )
     assert cli.main(["review", LINK]) == 0
     (review,) = world.github.reviews
     assert [(c.path, c.line) for c in review.comments] == [("src/cart.py", 3)]
@@ -252,7 +288,7 @@ def test_a_review_is_posted_when_not_a_dry_run(
 def test_the_public_function_returns_the_links_and_the_publish_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    World(monkeypatch, understanding(), EXPLORE_DONE, found(), found())
+    World(monkeypatch, understanding(), NOTHING_TO_SCREEN, EXPLORE_DONE, found(), found())
     result = review_pull_request(LINK, settings=Settings(github_token="ghp_" + "t" * 36))
     assert result.review_url is None  # nothing found, so no review, only the summary
     assert result.summary_url == f"{LINK}#issuecomment-1"
@@ -264,7 +300,9 @@ def test_a_new_commit_during_the_review_means_nothing_is_posted(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("PRRA_GITHUB_TOKEN", "ghp_" + "t" * 36)
-    world = World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found(), KEEP_ONE)
+    world = World(
+        monkeypatch, understanding(), NOTHING_TO_SCREEN, EXPLORE_DONE, found(BUG), found(), KEEP_ONE
+    )
     world.github.moved_head = "a" * 40
     assert cli.main(["review", LINK]) == 1
     assert world.github.reviews == []
@@ -278,7 +316,9 @@ def test_a_failed_summary_after_the_findings_is_reported_as_such(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("PRRA_GITHUB_TOKEN", "ghp_" + "t" * 36)
-    world = World(monkeypatch, understanding(), EXPLORE_DONE, found(BUG), found(), KEEP_ONE)
+    world = World(
+        monkeypatch, understanding(), NOTHING_TO_SCREEN, EXPLORE_DONE, found(BUG), found(), KEEP_ONE
+    )
     world.github.summary_error = ReviewIncomplete("GitHub answered 502")
     assert cli.main(["review", LINK]) == 1
     assert len(world.github.reviews) == 1
@@ -291,7 +331,7 @@ def test_with_nothing_found_only_the_summary_link_is_printed(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("PRRA_GITHUB_TOKEN", "ghp_" + "t" * 36)
-    World(monkeypatch, understanding(), EXPLORE_DONE, found(), found())
+    World(monkeypatch, understanding(), NOTHING_TO_SCREEN, EXPLORE_DONE, found(), found())
     assert cli.main(["review", LINK]) == 0
     err = capsys.readouterr().err
     assert "Summary posted:" in err

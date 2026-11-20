@@ -359,17 +359,28 @@ class ReviewScope(_Frozen):
         return any(skip.reason.is_gap for skip in self.skipped)
 
 
-class Understanding(_Frozen):
+class UnderstandingAnswer(_Frozen):
     """What the pull request is for, written before looking for problems (FR-2)."""
+
+    # The understand stage's answer, exactly as the model is asked for it. Its name and the
+    # description above are part of the schema the model is sent, so they don't change
+    # with what the review adds to it (#80).
+    model_config = ConfigDict(title="Understanding")
 
     goal: NonEmptyStr
     summary: NonEmptyStr
     risky_parts: tuple[NonEmptyStr, ...] = ()
-    # Sentences of the pull request's text that tell the reviewer, or an AI, what to do or
-    # what to conclude, quoted exactly; left out of what the finding passes read (NFR-5).
-    addressed_to_reviewer: tuple[NonEmptyStr, ...] = ()
     goal_unclear: bool
     goal_source: GoalSource
+
+
+class Understanding(UnderstandingAnswer):
+    """What the pull request is for (FR-2), and what its text tells the reviewer to do."""
+
+    # Sentences of the pull request's text that tell the reviewer, or an AI, what to do or
+    # what to conclude, quoted exactly by the screen stage; left out of what the finding
+    # passes read (NFR-5).
+    addressed_to_reviewer: tuple[NonEmptyStr, ...] = ()
 
 
 class ToolCall(_Frozen):
