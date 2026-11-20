@@ -145,6 +145,55 @@ read finding by finding.
 | #72 | The double-check lowered right findings (Critical to Low) because it sees less than the finding pass | It may raise a finding, never lower it | Recommendation accuracy 33% to 36% |
 | #74 | Four held-out cases had informed a change | Replaced by new ones | Honest held-out scores |
 
+### Building it to hold for any model
+
+Some of the fixes worked because of how this particular model behaves. The next six make
+the design itself right, so that with a different model the results are what you'd expect,
+with no surprises:
+
+| Issue | What was wrong | The fix | What it changed (tuning cases) |
+|---|---|---|---|
+| #78 | Running a case's code left `__pycache__` files, and the loader stopped with an error that named no file | The loader leaves caches out and names any file that isn't text | Evaluations load again |
+| #80 | Asking the understand call for orders to the reviewer, as one more field, reworded the understanding in 17 of 33 cases | A screen step of its own: one job per model call | Line accuracy 62% to 75%, recommendation accuracy 38% to 43% |
+| #82 | Orders can hide in code comments too (inject-b) | Comments the change adds are screened line by line; code never is | inject-b's comment is left out of every later step |
+| #84 | The double-check judged with less than the finding pass had, so its disputes were right only half the time | It gets the same context, and the code at the other places a finding names | It can know what the finding pass knew: l2-b's division by zero is kept Critical because of the description |
+| #86 | 5 of 37 findings gave the severity definition copied from the prompt as their reason | Code replaces a reason with fewer than four words of its own | Measured by replay: exactly those 5 changed |
+| #88 | The understanding's "risky parts" had a default, so the schema made them optional and the model never gave them | Required, and shown only to the person: read by the finding passes, one wrong guess became two false High findings on a clean change | Precision back from 82% to 89%; close calls tipped both ways (inject-b caught, l2-a and l3-a missed) |
+
+### The published evaluation (#23)
+
+The scores of v0.3.0: the 33 cases, 3 runs each (99 reviews, about 3 hours), every finding
+read, nothing tuned before or during the run. Everything is in `eval/published/0.3.0/`.
+
+| Measure | Target | All 33 | Tuning (21) | Held out (12) |
+|---|---|---|---|---|
+| Catch rate | 60% | 41% | 41% | 40% |
+| Precision | 70% | 86% | 89% | 80% |
+| False alarms per pull request | 1 or fewer | 0.1 | 0.0 | 0.1 |
+| Line accuracy | 90% | 73% | 71% | 75% |
+| Recommendation accuracy | 80% | 39% | 43% | 33% |
+| Comments per clean pull request | 1 or fewer | 0.0 | 0.0 | 0.0 |
+| Prompt injections resisted | 100% | 100% | 100% | 100% |
+| Minutes per pull request | under 5 | 1.8 | 1.7 | 1.8 |
+
+What it showed:
+
+- **No overfitting:** the held-out cases score like the tuning cases (40% and 41% caught).
+- **Fully repeatable this time:** all three runs gave the same findings and the same
+  recommendation in every case.
+- **Reading mattered again:** 3 findings in held-out cases had never been read. Counted by
+  location, all three were catches; read, one was a false alarm, and the held-out catch rate
+  went from 50% to 40%.
+- **Some misses were ours, not the model's.** Looking at what was dropped, not only at what
+  was posted: 3 of the 16 missed problems had been found and then removed by the agent's own
+  checks. The double-check rejected right findings with reasons that agree with them, 6 times
+  (2 dropped, 4 sent to a person instead of asking for changes), and the rule for findings
+  that describe no failure dropped one whose explanation named the bug.
+- **The 16k context window is confirmed:** the largest model call used 1,851 of its 16,384
+  tokens, and nothing was cut to fit. But the cases have at most 21 changed lines, so the
+  speed targets for 300 and 500 lines are still unmeasured.
+- **Every gap has its own issue** (#92 to #100), in the v1.0.0 milestone.
+
 ### Problems & fixes
 
 - **The laptop went to sleep during evaluations**, three times. A small script keeps Windows
@@ -153,7 +202,13 @@ read finding by finding.
 - **One fix bundled two changes** (#66): removing the examples, and a new rule for the notes.
   The evaluation got worse; an ablation showed the new rule was the cause, and it was taken back.
 - **Running a test case's code** left Python's `__pycache__` files in its folder, and the
-  case loader then failed on them. They were removed.
+  case loader then failed on them. They were removed, and the loader now leaves them out (#78).
+- **The laptop slept during the published evaluation too.** One review reached the 20-minute
+  limit and was reported as incomplete, which is what the limit is for. It was reviewed again
+  on its own, with the same commit, and put in its place; the published folder says so.
+- **One change moved other scores** (#88): taking the risky parts out of what the finding
+  passes read changed their message in every case, and close calls tipped either way. One run
+  can't tell that from chance; three runs can.
 
 ### Lessons
 
@@ -169,17 +224,37 @@ read finding by finding.
 - **A metric can be right by accident**: removing a wrong finding lowered recommendation
   accuracy, because the wrong finding had produced the expected answer (#68).
 - **Held-out data only stays honest if nothing is tuned on it** (#74).
+- **One job per model call** (#80): adding one field to a call changed its other answers.
+- **Every field of an answer schema is required** (#88): to the model, a field with a
+  default is optional, and it skipped it every time.
+- **Never feed a model's unchecked guess to another model call** (#88): one wrong guess
+  became two false findings, and Request Changes on a clean change.
+- **A checker needs the same evidence as what it checks** (#84), **and the order of its
+  answer matters**: asked for its decision before its reason, it often gave a reason that
+  contradicts the decision. That's the likely cause, to be tested in #92.
+- **Look at what was dropped, not only at what was posted** (#23): a miss is either "never
+  found" or "found and thrown away", and only the second can be fixed without a better model.
+- **A small test flatters, and a small slice is noisy:** the 5-sample model test
+  ([ADR-001](docs/adr/001-model-choice.md)) caught 4 of 4, the 33 cases catch 41%. Each review
+  level has 5 to 7 planted problems, so one case moves its score by 14 to 20 points.
+- **A test set only confirms what it covers** (#23): small cases can't confirm the speed
+  targets for big pull requests (#98).
+- **A published score must be reproducible:** the commit, the model and settings, the
+  readings, and `--rescore` writing the same files again, byte for byte.
 
 ### Where we are
 
-| Measure | Target | After #62 | Now |
-|---|---|---|---|
-| Catch rate | 60% | 30% | 33% |
-| Precision | 70% | 62% | 83% |
-| False alarms per pull request | 1 or fewer | 0.2 | 0.1 |
-| Comments per clean pull request | 1 or fewer | 0.4 | 0 |
-| Prompt injections resisted | 100% | 0% | 67% |
-| Recommendation accuracy | 80% | 30% | 36% |
+| Measure | Target | After #62 | After #74 | Published (v0.3.0) |
+|---|---|---|---|---|
+| Catch rate | 60% | 30% | 33% | 41% |
+| Precision | 70% | 62% | 83% | 86% |
+| False alarms per pull request | 1 or fewer | 0.2 | 0.1 | 0.1 |
+| Comments per clean pull request | 1 or fewer | 0.4 | 0 | 0 |
+| Prompt injections resisted | 100% | 0% | 67% | 100% |
+| Recommendation accuracy | 80% | 30% | 36% | 39% |
 
-Most wrong recommendations now come from problems the 7B model never finds (16 of 22). The
-next step measures how much of that is the model: the same evaluation with `qwen3-coder:30b`.
+Only `qwen2.5-coder:7b` is measured. `qwen3-coder:30b` doesn't fit in the laptop's free
+memory during normal work, so it isn't tested (owner's decision, 2026-11-18); the model is a
+setting, so the same evaluation measures it on a computer that can run it. The gaps where the
+design, not the model, threw right findings away (#92, #93) can be fixed without a better
+model.
