@@ -25,10 +25,8 @@ from pr_review_agent.domain import (
     ReviewScope,
     Understanding,
 )
-from pr_review_agent.prompts import clip, data_block, leave_out, load
-from pr_review_agent.stages import ModelCall, ask
-
-DESCRIPTION_CHARS = 1500
+from pr_review_agent.prompts import data_block, leave_out, load
+from pr_review_agent.stages import ModelCall, ask, review_context
 
 
 class FindingsAnswer(BaseModel):
@@ -126,31 +124,11 @@ def build_message(
     explored: ExploredContext,
     batch: tuple[ChangedFile, ...],
 ) -> str:
-    risky = "\n".join(f"- {part}" for part in understanding.risky_parts) or "- (none named)"
-    # What the pull request tells the reviewer to do or conclude, in its text or in a comment
-    # it adds, is left out (NFR-5); before clipping, so a passage can't be cut in two.
-    passages = understanding.addressed_to_reviewer
-    description = clip(leave_out(pull_request.description, passages), DESCRIPTION_CHARS)
-    parts = [
-        "## What the pull request is for (written in an earlier step)",
-        data_block(
-            "UNDERSTANDING",
-            f"Goal: {understanding.goal}\nSummary: {understanding.summary}\nRisky parts:\n{risky}",
-        ),
-        "## Pull request",
-        data_block("TITLE", leave_out(pull_request.title, passages)),
-        data_block("DESCRIPTION", description or "(empty)"),
-    ]
-    if explored.notes:
-        notes = "\n".join(f"- {note}" for note in explored.notes)
-        parts += ["## Notes from exploring the repository", data_block("NOTES", notes)]
-    if explored.excerpts:
-        related = "\n\n".join(
-            f"### {excerpt.path} (from line {excerpt.start_line})\n{excerpt.text}"
-            for excerpt in explored.excerpts
-        )
-        parts += ["## Related code (unchanged, for context)", data_block("RELATED CODE", related)]
+    # The context the double-check gets too, then the changes; a comment the change adds that
+    # tells the reviewer what to do is left out of them (NFR-5).
+    parts = review_context(pull_request, understanding, explored)
     diff = "\n\n".join(render_file(file) for file in batch)
+    passages = understanding.addressed_to_reviewer
     parts += ["## The changes to review", data_block("DIFF", leave_out(diff, passages))]
     return "\n\n".join(parts)
 

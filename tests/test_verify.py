@@ -15,6 +15,9 @@ from pr_review_agent.domain import (
     Deadline,
     DiffLine,
     DroppedFinding,
+    Excerpt,
+    ExploredContext,
+    ExploreStop,
     FileStatus,
     Finding,
     FindingStatus,
@@ -23,10 +26,10 @@ from pr_review_agent.domain import (
     Side,
     TimeLimitReached,
 )
-from pr_review_agent.prompts import LEFT_OUT
+from pr_review_agent.prompts import LEFT_OUT, load
 from pr_review_agent.stages import ModelCall
 from pr_review_agent.stages.verify import FINDINGS_PER_CALL, build_message, verify
-from tests.builders import make_file, make_finding
+from tests.builders import make_file, make_finding, make_pull_request, make_understanding
 from tests.fakes import FakeChatModel, double_check
 
 CART = make_file("src/cart.py", [f"line_{n} = {n}" for n in range(1, 41)])
@@ -46,7 +49,9 @@ def check(
     return verify(
         findings,
         options.get("dropped_before", ()),
-        (CART,),
+        options.get("pull_request", make_pull_request(files=(CART,))),
+        options.get("understanding", make_understanding()),
+        options.get("explored", ExploredContext()),
         root,
         model,
         options.get("deadline", Deadline(60)),
@@ -57,7 +62,7 @@ def test_a_finding_the_model_confirms_is_kept(root: Path) -> None:
     finding = make_finding(file="src/cart.py", line=20)
     checked, calls = check(FakeChatModel([double_check(True)]), root, finding)
     assert checked.kept == (finding,)
-    assert [call.prompt for call in calls] == ["verify v1"]
+    assert [call.prompt for call in calls] == [load("verify").label]
 
 
 @pytest.mark.parametrize("severity", [Severity.MEDIUM, Severity.LOW])
@@ -151,14 +156,14 @@ def test_findings_on_removed_code_show_only_the_change(root: Path) -> None:
     )
     finding = make_finding(file="src/cart.py", line=20, side=Side.OLD)
     model = FakeChatModel([double_check(True)])
-    verify((finding,), (), (removed,), root, model, Deadline(60))
+    check(model, root, finding, pull_request=make_pull_request(files=(removed,)))
     message = model.calls[0].user
     assert "at the reviewed commit" not in message
     assert "       - check(items)" in message
 
 
 def test_a_finding_on_a_file_without_a_diff_shows_no_change(root: Path) -> None:
-    message = build_message((make_finding(file="src/cart.py", line=20),), {}, root)
+    message = build_message((make_finding(file="src/cart.py", line=20),), [], {}, root)
     assert "The change near it" not in message
     assert "    20  line_20 = 20" in message
 
@@ -251,7 +256,64 @@ def test_what_the_pull_request_tells_the_reviewer_is_left_out_of_the_code_shown(
     code = make_file("src/cart.py", lines)
     model = FakeChatModel([double_check(True)])
     finding = make_finding(file="src/cart.py", line=3)
-    verify((finding,), (), (code,), tmp_path, model, Deadline(60), passages=(comment,))
+    understanding = make_understanding(addressed_to_reviewer=(comment,))
+    pull_request = make_pull_request(files=(code,))
+    check(model, tmp_path, finding, pull_request=pull_request, understanding=understanding)
     message = model.calls[0].user
     assert comment not in message
     assert message.count(LEFT_OUT) == 2  # the code around the line, and the change near it
+
+
+def test_the_double_check_gets_the_context_the_finding_pass_had(root: Path) -> None:
+    # It judged blind without it: "not called with an empty list in the provided code
+    # snippet", when the description said new products have no ratings yet (#84).
+    explored = ExploredContext(
+        notes=("src/report.py:4 multiplies the result.",),
+        excerpts=(Excerpt(path="src/report.py", start_line=1, text="     1  show(x)"),),
+        stopped_by=ExploreStop.DONE,
+    )
+    pull_request = make_pull_request(description="New carts start empty.", files=(CART,))
+    findings = (
+        make_finding(file="src/cart.py", line=10),
+        make_finding(file="src/cart.py", line=30),
+    )
+    model = FakeChatModel([double_check(True, True)])
+    check(model, root, *findings, pull_request=pull_request, explored=explored)
+    message = model.calls[0].user
+    assert message.count("## What the pull request is for") == 1  # once per call
+    assert "Goal: Give members a 10% discount." in message
+    assert "<<<BEGIN DESCRIPTION>>>" + chr(10) + "New carts start empty." in message
+    assert "src/report.py:4 multiplies the result." in message
+    assert "## Related code (unchanged, for context)" in message
+    assert message.index("## Related code") < message.index("## The findings to check")
+    assert message.index("## The findings to check") < message.index("## Finding 1")
+
+
+def test_the_code_at_the_other_places_a_finding_names_is_shown(root: Path) -> None:
+    lines = [f"report_{n} = {n}" for n in range(1, 31)]
+    (root / "src" / "report.py").write_text(chr(10).join(lines), encoding="utf-8")
+    finding = make_finding(file="src/cart.py", line=20, affected_places=("src/report.py:15",))
+    model = FakeChatModel([double_check(True)])
+    check(model, root, finding)
+    message = model.calls[0].user
+    assert "Code at src/report.py:15, which the finding says it affects:" in message
+    assert "     9  report_9 = 9" in message  # from 6 lines before
+    assert "    21  report_21 = 21" in message  # to 6 lines after
+    assert "report_8 =" not in message
+    assert "report_22 =" not in message
+
+
+@pytest.mark.parametrize(
+    "place",
+    [
+        "../outside.py:3",  # outside the repository: the tools refuse it
+        "src/missing.py:2",  # not a file
+        "notify.welcome()",  # not a place at all
+        "src/cart.py:22",  # already in the code shown around the finding's line
+    ],
+)
+def test_a_place_the_tools_refuse_or_already_shown_is_left_out(root: Path, place: str) -> None:
+    finding = make_finding(file="src/cart.py", line=20, affected_places=(place,))
+    model = FakeChatModel([double_check(True)])
+    check(model, root, finding)
+    assert "which the finding says it affects" not in model.calls[0].user

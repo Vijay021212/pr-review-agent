@@ -195,11 +195,12 @@ def _run_stages(
             findings, verify_calls = verify(
                 tuple(kept),
                 tuple(dropped),
-                pull_request.files,
+                pull_request,
+                understanding,
+                explored,
                 root,
                 model,
                 deadline,
-                passages=understanding.addressed_to_reviewer,
             )
             _record_calls(run_log, "double-check", verify_calls)
             calls += verify_calls
