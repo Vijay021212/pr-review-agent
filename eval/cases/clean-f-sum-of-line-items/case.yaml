@@ -1,0 +1,6 @@
+title: Use sum() for the basket total
+description: Replaces the loop that adds up the line prices with sum(). The total is the same, also for
+  an empty basket.
+kind: clean
+recommendation: Approve
+held_out: true
