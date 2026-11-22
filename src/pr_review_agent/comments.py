@@ -7,8 +7,9 @@ comments are recognised only in the languages listed here, by the file's extensi
 other file none is, which can only leave a comment in, never take code for one.
 
 The screen records each comment line it leaves out by its place, the file and the line, and
-every view of the code hides those lines and only those (#109): a comment that repeats a
-line of code can't hide that line, whatever its text.
+the diffs and the files the later stages read hide those lines and only those (#109): a
+comment that repeats a line of code can't hide that line, whatever its text. The project map
+doesn't hide them yet (#104).
 """
 
 from __future__ import annotations

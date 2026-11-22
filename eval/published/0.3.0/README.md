@@ -8,14 +8,14 @@ uv run pr-review-agent eval eval/cases --runs 3
 
 | | |
 |---|---|
-| Code | every v0.3.0 change up to [#88](https://github.com/Vijay021212/pr-review-agent/issues/88), commit `73a209c`; nothing was tuned before or during the run |
+| Code | every v0.3.0 change up to [#88](https://github.com/Vijay021212/pr-review-agent/issues/88), commit `192933f`, merged on 20 November with the same files as `73a209c`, the commit the run used; nothing was tuned before or during the run |
 | Model | `qwen2.5-coder:7b` through Ollama, temperature 0, 16,384-token context |
 | Computer | a Windows laptop with 24 GB RAM, CPU only (NFR-2) |
 | Cases | the 33 cases in `eval/cases`, 12 of them held out, 3 runs each: 99 reviews |
 | Dates | 18 and 19 November 2026 |
 | Readings | every finding read; the verdicts and their reasons are in `eval/readings.yaml` |
 
-- `report.md`: every measure per review level, for all cases, the tuning cases and the held-out cases, as the average, lowest and highest over the 3 runs.
+- `report.md`: every measure for all cases, the tuning cases and the held-out cases, as the average, lowest and highest over the 3 runs, and the catch rate and precision per review level.
 - `review-sheet.md`: every finding, with its reading.
 - `results.json`: every review in full.
 
