@@ -3,14 +3,14 @@
 [![CI](https://github.com/Vijay021212/pr-review-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Vijay021212/pr-review-agent/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-An AI agent that reviews GitHub pull requests the way a careful senior engineer would: it understands the goal of the change, explores the related code on its own, finds real problems at five review levels, double-checks them, and posts one clear review with a recommendation. It runs on a **free local model** by default (Ollama), and can be switched to a paid model through settings.
+An AI agent that reviews GitHub pull requests the way a careful senior engineer would: it understands the goal of the change, explores the related code on its own, finds real problems at five review levels, double-checks them, and posts one clear review with a recommendation. It runs on a **free local model** (Ollama); paid models, chosen through settings, come in v1.0.0 ([#27](https://github.com/Vijay021212/pr-review-agent/issues/27)).
 
 > **Status:** in development. Reviews in the terminal and on GitHub work, and how well they work is measured: see the [scores of v0.3.0](#scores-of-v030). Progress is tracked in the [issues](https://github.com/Vijay021212/pr-review-agent/issues), [milestones](https://github.com/Vijay021212/pr-review-agent/milestones) and [project board](https://github.com/users/Vijay021212/projects/2).
 
 ## Requirements
 
 - Windows or Linux, Python 3.12 or newer, and [uv](https://docs.astral.sh/uv/)
-- [Ollama](https://ollama.com/) with `qwen2.5-coder:7b` (a 4.7 GB download), or an API key for a paid provider
+- [Ollama](https://ollama.com/) with `qwen2.5-coder:7b` (a 4.7 GB download)
 - A GitHub token with **Contents: read** and **Pull requests: write**
 
 ## Install
@@ -80,14 +80,14 @@ flowchart LR
 | 0. Preflight | Checks Ollama, the model and the GitHub token; one review of a pull request at a time | No |
 | 1. Fetch | Reads the pull request at its latest commit; refuses closed and merged ones | No |
 | 2. Select files | Skips lock, binary and generated files with a reason; fits the rest into the model's context | No |
-| 3. Understand and screen | Writes down the goal, a summary and the risky parts; then, in a call of its own, quotes any sentence of the pull request's text, or comment its code adds, that tells the reviewer what to do; the later stages read the text without them and the code with those comments hidden, all but the project map ([#104](https://github.com/Vijay021212/pr-review-agent/issues/104)) | Yes |
+| 3. Understand and screen | Writes down the goal, a summary and the risky parts; then, in a call of its own, quotes any sentence of the pull request's text, or comment its code adds, that tells the reviewer what to do; the later stages read the text without them and the code with those comments hidden, all but the project map, skipped files and, on a big pull request, the files after the first batch ([#104](https://github.com/Vijay021212/pr-review-agent/issues/104)) | Yes |
 | 4. Explore | Downloads the code at that commit and reads related code with read-only tools: search, open a file, list a folder | Yes, step by step |
 | 5. Find problems | Pass A: correctness and regressions (levels 1–3). Pass B: security and performance (levels 4–5) | Yes |
 | 6. Double-check | Puts every finding on a changed line, re-checks it against the code, removes duplicates | Yes |
 | 7. Recommend | Approve, Request Changes or Needs Human Review, by fixed rules, with the rule that decided it | No |
 | 8. Publish | Posts all findings in one plain comment review and the summary, unless it's a dry run | No |
 
-Pull request text and code are always treated as data, never as instructions, and sentences or code comments that tell the reviewer what to do or conclude are left out of what the later stages read, all but the project map ([#104](https://github.com/Vijay021212/pr-review-agent/issues/104)), and listed in the summary; the tools can only read inside the downloaded code; secrets are masked in everything the agent writes. The full design is in [docs/design.md](docs/design.md).
+Pull request text and code are always treated as data, never as instructions, and sentences or code comments that tell the reviewer what to do or conclude are left out of what the later stages read, all but the project map, skipped files and, on a big pull request, the files after the first batch ([#104](https://github.com/Vijay021212/pr-review-agent/issues/104)), and listed in the summary; the tools can only read inside the downloaded code; secrets are masked in everything the agent writes. The full design is in [docs/design.md](docs/design.md).
 
 ## Evaluation
 
@@ -95,7 +95,7 @@ Pull request text and code are always treated as data, never as instructions, an
 uv run pr-review-agent eval eval/cases --runs 3
 ```
 
-Reviews every test pull request in `eval/cases` with the real agent, offline (nothing is read from or posted to GitHub), and writes `report.md`, `review-sheet.md` and `results.json` to `eval/results/<date-time>/`. Each case is a folder with a `case.yaml` (title, description, the planted problems and the expected recommendation), a `base/` and a `head/` folder: the code before and after the change. The report gives every measure of [requirements section 7](docs/requirements.md#7-how-we-measure-success) per review level, for the held-out cases separately, as the average, lowest and highest over the runs.
+Reviews every test pull request in `eval/cases` with the real agent, offline (nothing is read from or posted to GitHub), and writes `report.md`, `review-sheet.md` and `results.json` to `eval/results/<date-time>/`. Each case is a folder with a `case.yaml` (title, description, the planted problems and the expected recommendation), a `base/` and a `head/` folder: the code before and after the change. The report gives every measure of [requirements section 7](docs/requirements.md#7-how-we-measure-success) for all cases, the tuning cases and the held-out cases, as the average, lowest and highest over the runs, and the catch rate and precision per review level.
 
 A finding only catches a planted problem if it also describes it, and that takes reading ([requirements 7.1](docs/requirements.md#71-evaluation-rules)). The review sheet lists every finding with its explanation and a short fingerprint; the verdict (`same problem`, `real problem` or `false alarm`) and its reason go in `eval/readings.yaml`, and the scores use them. A finding comes back with the same fingerprint as long as its place and text don't change, so it keeps its reading in later evaluations. Until a finding is read, it counts by its location, and the report says how many do. To score a finished evaluation again after reading, without reviewing anything:
 

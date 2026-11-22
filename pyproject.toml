@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "pr-review-agent"
 dynamic = ["version"]
-description = "An AI agent that reviews GitHub pull requests. Runs on a free local model by default; paid models optional."
+description = "An AI agent that reviews GitHub pull requests. Runs on a free local model (Ollama); paid models come in v1.0.0."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"

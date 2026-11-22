@@ -1,12 +1,12 @@
 """The evaluation's report, its review sheet, and its raw results.
 
-The report gives every measure of requirements 7, per review level and against its first
-target, for all cases, the tuning cases and the held-out cases separately (7.1), each as
-the average, lowest and highest over the repeat runs. The review sheet lists every finding
-with its explanation and fingerprint, so a person can read whether a finding near a planted
-problem describes it, and whether every other one is a real problem or a false alarm, and
-record the verdict (7.1, `readings.py`). The raw results keep every review in full, so a
-finished evaluation can be scored again once its findings are read.
+The report gives every measure of requirements 7 against its first target, for all cases,
+the tuning cases and the held-out cases separately (7.1), each as the average, lowest and
+highest over the repeat runs, and the catch rate and precision per review level. The review
+sheet lists every finding with its explanation and fingerprint, so a person can read whether
+a finding near a planted problem describes it, and whether every other one is a real problem
+or a false alarm, and record the verdict (7.1, `readings.py`). The raw results keep every
+review in full, so a finished evaluation can be scored again once its findings are read.
 """
 
 from __future__ import annotations
